@@ -1,10 +1,10 @@
 const express = require("express");
 const router = express.Router();
 const applicationController = require("../controllers/application.controller");
-const { protect, restrict } = require("../middleware/auth.middleware");
+const { extractTenant } = require("../middleware/tenant");
 
-// protect all routes - user must be logged in
-router.use(protect);
+// protect all routes - user must be logged in and tenant context populated
+router.use(extractTenant);
 
 // CREATE Application
 router.post("/", applicationController.createApplication);

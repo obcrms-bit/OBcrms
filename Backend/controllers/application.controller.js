@@ -19,6 +19,7 @@ exports.createApplication = async (req, res) => {
     }
 
     const application = new Application({
+      companyId: req.companyId,
       student,
       universityName,
       country,
@@ -38,7 +39,7 @@ exports.createApplication = async (req, res) => {
 // Get all applications
 exports.getAllApplications = async (req, res) => {
   try {
-    const applications = await Application.find().populate("student");
+    const applications = await Application.find({ companyId: req.companyId }).populate("student");
     sendSuccess(res, 200, "Applications fetched", applications);
   } catch (error) {
     sendError(res, 500, "Failed to retrieve applications", error.message);
@@ -49,7 +50,7 @@ exports.getAllApplications = async (req, res) => {
 exports.getApplicationById = async (req, res) => {
   try {
     const { id } = req.params;
-    const application = await Application.findById(id).populate("student");
+    const application = await Application.findOne({ _id: id, companyId: req.companyId }).populate("student");
     if (!application) {
       return sendError(res, 404, "Application not found");
     }
@@ -64,10 +65,14 @@ exports.updateApplication = async (req, res) => {
   try {
     const { id } = req.params;
     const updates = { ...req.body, updatedAt: Date.now() };
-    const application = await Application.findByIdAndUpdate(id, updates, {
-      new: true,
-      runValidators: true,
-    }).populate("student");
+    const application = await Application.findOneAndUpdate(
+      { _id: id, companyId: req.companyId },
+      updates,
+      {
+        new: true,
+        runValidators: true,
+      }
+    ).populate("student");
     if (!application) {
       return sendError(res, 404, "Application not found");
     }
@@ -81,7 +86,7 @@ exports.updateApplication = async (req, res) => {
 exports.deleteApplication = async (req, res) => {
   try {
     const { id } = req.params;
-    const application = await Application.findByIdAndDelete(id);
+    const application = await Application.findOneAndDelete({ _id: id, companyId: req.companyId });
     if (!application) {
       return sendError(res, 404, "Application not found");
     }

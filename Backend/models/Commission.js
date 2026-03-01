@@ -1,6 +1,12 @@
 const mongoose = require("mongoose");
 
 const commissionSchema = new mongoose.Schema({
+  companyId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Company",
+    required: [true, "Company ID is required"],
+    index: true,
+  },
   agentId: {
     type: String,
     required: [true, "Agent ID is required"],

@@ -12,8 +12,13 @@ router.post("/register-company", authController.registerCompany);
 router.post("/login", authController.login);
 
 // ==================== PROTECTED ENDPOINTS ====================
-// Register new user to company (moved to public or handled via body companyId)
-router.post("/register", authController.register);
+// Register new user to company (requires admin authorization)
+router.post(
+    "/register",
+    extractTenant,
+    authorize(["admin", "super_admin"]),
+    authController.register
+);
 
 // Logout - any authenticated user
 router.post("/logout", extractTenant, authController.logout);

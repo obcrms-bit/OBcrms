@@ -2,6 +2,10 @@ const express = require("express");
 const router = express.Router();
 const Commission = require("../models/Commission");
 const { sendSuccess, sendError } = require("../utils/responseHandler");
+const { extractTenant } = require("../middleware/tenant");
+
+// Apply multi-tenancy middleware
+router.use(extractTenant);
 
 // CREATE Commission
 router.post("/", async (req, res) => {
@@ -13,6 +17,7 @@ router.post("/", async (req, res) => {
     }
 
     const commission = new Commission({
+      companyId: req.companyId,
       agentId,
       leadId,
       studentId,
@@ -29,7 +34,7 @@ router.post("/", async (req, res) => {
 // GET All Commissions
 router.get("/", async (req, res) => {
   try {
-    const commissions = await Commission.find()
+    const commissions = await Commission.find({ companyId: req.companyId })
       .populate("leadId")
       .populate("studentId");
     sendSuccess(res, 200, "Commissions retrieved successfully", commissions);
@@ -41,7 +46,7 @@ router.get("/", async (req, res) => {
 // GET Commission by ID
 router.get("/:id", async (req, res) => {
   try {
-    const commission = await Commission.findById(req.params.id)
+    const commission = await Commission.findOne({ _id: req.params.id, companyId: req.companyId })
       .populate("leadId")
       .populate("studentId");
     if (!commission) {
@@ -56,8 +61,8 @@ router.get("/:id", async (req, res) => {
 // UPDATE Commission
 router.put("/:id", async (req, res) => {
   try {
-    const commission = await Commission.findByIdAndUpdate(
-      req.params.id,
+    const commission = await Commission.findOneAndUpdate(
+      { _id: req.params.id, companyId: req.companyId },
       { ...req.body, updatedAt: Date.now() },
       { new: true, runValidators: true }
     )
@@ -75,7 +80,7 @@ router.put("/:id", async (req, res) => {
 // DELETE Commission
 router.delete("/:id", async (req, res) => {
   try {
-    const commission = await Commission.findByIdAndDelete(req.params.id);
+    const commission = await Commission.findOneAndDelete({ _id: req.params.id, companyId: req.companyId });
     if (!commission) {
       return sendError(res, 404, "Commission not found");
     }

@@ -40,6 +40,8 @@ const applicationRoutes = require("./routes/application.routes");
 const leadRoutes = require("./routes/leadRoutes");
 const commissionRoutes = require("./routes/commissionRoutes");
 const dashboardRoutes = require("./routes/dashboard.routes");
+const branchRoutes = require("./routes/branchRoutes");
+const agentRoutes = require("./routes/agentRoutes");
 
 // ==================== 6. MOUNT ROUTES ====================
 app.use("/api/auth", authRoutes);
@@ -48,6 +50,8 @@ app.use("/api/applications", applicationRoutes);
 app.use("/api/leads", leadRoutes);
 app.use("/api/commissions", commissionRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/branches", branchRoutes);
+app.use("/api/agents", agentRoutes);
 
 // ==================== 7. HEALTH CHECK ROUTE ====================
 app.get("/", (req, res) => {

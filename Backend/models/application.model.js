@@ -1,6 +1,12 @@
 const mongoose = require("mongoose");
 
 const applicationSchema = new mongoose.Schema({
+  companyId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Company",
+    required: [true, "Company ID is required"],
+    index: true,
+  },
   student: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Student",

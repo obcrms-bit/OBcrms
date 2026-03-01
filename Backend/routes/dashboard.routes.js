@@ -1,10 +1,11 @@
 const express = require("express");
 const router = express.Router();
 const dashboardController = require("../controllers/dashboard.controller");
-const { protect, restrict } = require("../middleware/auth.middleware");
+const { extractTenant } = require("../middleware/tenant");
+const { restrict } = require("../middleware/auth.middleware");
 
-// all dashboard routes must be authenticated
-router.use(protect);
+// all dashboard routes must be authenticated and tenant context populated
+router.use(extractTenant);
 // only admins can access (using lowercase)
 router.use(restrict("admin"));
 
