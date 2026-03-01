@@ -2,17 +2,23 @@ const express = require("express");
 const router = express.Router();
 const Lead = require("../models/Lead");
 const { sendSuccess, sendError } = require("../utils/responseHandler");
+const { extractTenant } = require("../middleware/tenant");
+
+router.use(extractTenant);
 
 // CREATE Lead
 router.post("/", async (req, res) => {
   try {
-    const { name, email, phone, source, interestedCourse } = req.body;
+    const { name, email, phone, source, interestedCourse, status } = req.body;
 
     if (!name || !email) {
       return sendError(res, 400, "Name and email are required");
     }
 
-    const lead = new Lead({ name, email, phone, source, interestedCourse });
+    const lead = new Lead({
+      companyId: req.companyId,
+      name, email, phone, source, interestedCourse, status
+    });
     await lead.save();
     sendSuccess(res, 201, "Lead created successfully", lead);
   } catch (error) {
@@ -26,7 +32,7 @@ router.post("/", async (req, res) => {
 // GET All Leads
 router.get("/", async (req, res) => {
   try {
-    const leads = await Lead.find();
+    const leads = await Lead.find({ companyId: req.companyId });
     sendSuccess(res, 200, "Leads retrieved successfully", leads);
   } catch (error) {
     sendError(res, 500, "Failed to retrieve leads", error.message);
@@ -36,7 +42,7 @@ router.get("/", async (req, res) => {
 // GET Lead by ID
 router.get("/:id", async (req, res) => {
   try {
-    const lead = await Lead.findById(req.params.id);
+    const lead = await Lead.findOne({ _id: req.params.id, companyId: req.companyId });
     if (!lead) {
       return sendError(res, 404, "Lead not found");
     }
@@ -49,8 +55,8 @@ router.get("/:id", async (req, res) => {
 // UPDATE Lead
 router.put("/:id", async (req, res) => {
   try {
-    const lead = await Lead.findByIdAndUpdate(
-      req.params.id,
+    const lead = await Lead.findOneAndUpdate(
+      { _id: req.params.id, companyId: req.companyId },
       { ...req.body, updatedAt: Date.now() },
       { new: true, runValidators: true }
     );
@@ -66,7 +72,7 @@ router.put("/:id", async (req, res) => {
 // DELETE Lead
 router.delete("/:id", async (req, res) => {
   try {
-    const lead = await Lead.findByIdAndDelete(req.params.id);
+    const lead = await Lead.findOneAndDelete({ _id: req.params.id, companyId: req.companyId });
     if (!lead) {
       return sendError(res, 404, "Lead not found");
     }

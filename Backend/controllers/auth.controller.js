@@ -75,7 +75,7 @@ exports.registerCompany = async (req, res) => {
       role: "super_admin",
       isActive: true,
     });
-    
+
     console.log("[registerCompany] About to save user...");
     await user.save();
     console.log("[registerCompany] User saved successfully");
@@ -114,8 +114,8 @@ exports.registerCompany = async (req, res) => {
 // Called by admin to add users to their company
 exports.register = async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
-    const companyId = req.companyId; // From extractTenant middleware
+    const { name, email, password, role, companyId: bodyCompanyId } = req.body;
+    const companyId = req.companyId || bodyCompanyId; // Support both middleware and direct body input
 
     if (!name || !email || !password) {
       return sendError(res, 400, "name, email, and password are required");
