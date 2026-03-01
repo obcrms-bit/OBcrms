@@ -275,3 +275,4 @@ Ready to deploy? See `DEPLOYMENT_GUIDE.md` for:
 - Deploying frontend to Vercel or Netlify
 - MongoDB Atlas setup
 - Environment variables configuration
+

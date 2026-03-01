@@ -179,7 +179,7 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
       } md:relative md:translate-x-0`}
     >
       <div className="p-6 flex items-center justify-between">
-        <h1 className="text-xl font-bold">Trust CRM</h1>
+        <h1 className="text-xl font-bold">Education CRM</h1>
         <button
           onClick={() => setIsOpen(false)}
           className="md:hidden text-gray-300 hover:text-white"
@@ -238,7 +238,7 @@ const Navbar = ({ onMenuClick }) => {
         <Menu size={24} />
       </button>
 
-      <h2 className="text-lg font-semibold text-gray-800">Trust Education CRM</h2>
+      <h2 className="text-lg font-semibold text-gray-800">Education CRM</h2>
 
       <div className="flex items-center space-x-4">
         <button className="text-gray-600 hover:text-gray-900">
@@ -386,7 +386,7 @@ const AdminDashboard = () => {
         {/* Header */}
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-600 mt-2">Welcome back to Trust Education CRM</p>
+          <p className="text-gray-600 mt-2">Welcome back to Education CRM</p>
         </div>
 
         {/* Stats Grid */}
@@ -610,4 +610,5 @@ export default App;
 4. Add Student CRUD operations
 5. Implement student table with pagination
 6. Add student assignment functionality
+
 

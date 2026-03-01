@@ -55,7 +55,7 @@ app.use("/api/dashboard", dashboardRoutes);
 app.get("/", (req, res) => {
   res.json({
     success: true,
-    message: "Trust Education CRM ERP Backend Running 🚀",
+    message: "Education CRM ERP Backend Running 🚀",
   });
 });
 

@@ -595,3 +595,4 @@ const user = await User.findById(id).select("+password");
 - [Authorization Middleware](../Backend/middleware/authorize.js)
 - [Tenant Context Utilities](../Backend/utils/tenantContext.js)
 - [Architecture Design](../SAAS_ARCHITECTURE.md)
+

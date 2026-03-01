@@ -45,7 +45,7 @@ function LoginPage() {
   return (
     <div className="login-container" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
       <div className="login-box" style={{ background: 'white', padding: '40px', borderRadius: '10px', boxShadow: '0 10px 25px rgba(0, 0, 0, 0.2)', width: '100%', maxWidth: '400px' }}>
-        <h1 style={{ marginBottom: '30px', color: '#333', textAlign: 'center', fontSize: '28px' }}>Trust Education CRM</h1>
+        <h1 style={{ marginBottom: '30px', color: '#333', textAlign: 'center', fontSize: '28px' }}>Education CRM</h1>
         {error && <div className="error-message" style={{ color: 'red', marginBottom: '15px', padding: '10px', background: '#ffe6e6', borderRadius: '5px' }}>{error}</div>}
         <form onSubmit={handleSubmit}>
           <div className="form-group" style={{ marginBottom: '20px' }}>

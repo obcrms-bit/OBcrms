@@ -1,4 +1,4 @@
-# Trust Education CRM/ERP - Complete Guide
+# Education CRM/ERP - Complete Guide
 
 A full-stack Education CRM/ERP system with multi-role support, student management, counselor assignment, and cloud deployment ready.
 
@@ -474,7 +474,7 @@ For issues or questions:
 
 ## 📄 License
 
-This project is part of Trust Education's CRM/ERP system.
+This project is part of Education's CRM/ERP system.
 
 ---
 
@@ -494,3 +494,4 @@ Built with best practices in:
 **Need backend setup?** → See [Backend/README.md](Backend/README.md)
 
 **Need frontend help?** → See [Frontend/FRONTEND_GUIDE.md](Frontend/FRONTEND_GUIDE.md)
+

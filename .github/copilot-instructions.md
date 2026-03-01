@@ -119,3 +119,4 @@ Same CRUD pattern applies to `/api/applications`, `/api/leads`, `/api/commission
 4. **Field Naming**: Use camelCase for all database fields and JSON responses
 5. **References**: Use Mongoose population (`ref:` and `.populate()`) for relational data like studentId
 6. **Status Fields**: Use enum constraints (e.g., "pending", "approved", "rejected") for state tracking
+

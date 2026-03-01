@@ -1,7 +1,7 @@
 # Cloud Deployment Guide - PART D
 
 ## Overview
-This guide covers deploying the complete Trust Education CRM stack to the cloud:
+This guide covers deploying the complete Education CRM stack to the cloud:
 - **Backend**: Node.js/Express API on Railway or Render
 - **Frontend**: React app on Vercel or Netlify
 - **Database**: MongoDB Atlas (cloud MongoDB)
@@ -23,7 +23,7 @@ This guide covers deploying the complete Trust Education CRM stack to the cloud:
 
 2. **Create Organization & Project**
    - Click "Create an Organization"
-   - Name it: "Trust Education"
+   - Name it: "Education"
    - Create a project: "CRM Backend"
 
 3. **Build a Cluster**
@@ -434,3 +434,4 @@ When ready to scale:
 - **React Deployment**: https://create-react-app.dev/deployment
 
 For additional help, reach out to your deployment provider's support.
+
