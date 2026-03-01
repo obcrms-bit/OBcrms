@@ -1,0 +1,43 @@
+const mongoose = require("mongoose");
+
+const commissionSchema = new mongoose.Schema({
+  agentId: {
+    type: String,
+    required: [true, "Agent ID is required"],
+  },
+  leadId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Lead",
+  },
+  studentId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Student",
+  },
+  amount: {
+    type: Number,
+    required: [true, "Commission amount is required"],
+    min: 0,
+  },
+  status: {
+    type: String,
+    enum: ["pending", "approved", "paid"],
+    default: "pending",
+  },
+  transactionDate: {
+    type: Date,
+    default: Date.now,
+  },
+  notes: {
+    type: String,
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now,
+  },
+  updatedAt: {
+    type: Date,
+    default: Date.now,
+  },
+});
+
+module.exports = mongoose.model("Commission", commissionSchema);

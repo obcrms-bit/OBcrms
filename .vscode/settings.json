@@ -1,0 +1,25 @@
+{
+  "files.associations": {
+    "*.css": "tailwindcss"
+  },
+  "editor.quickSuggestions": {
+    "strings": true
+  },
+  "[tailwindcss]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "css.lint.unknownAtRules": "ignore",
+  "css.diagnostics.enabled": false,
+  "editor.experimental.useLookaheadLineMapping": true,
+  "tailwindCSS.classAttributes": [
+    "class",
+    "className",
+    "ngClass",
+    "classList",
+    "my-special-class"
+  ],
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "off"
+  }
+}
