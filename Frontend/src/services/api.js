@@ -24,10 +24,19 @@ api.interceptors.request.use(
 
 // Auth endpoints
 export const authAPI = {
+  registerCompany: (companyName, email, password, name, country) =>
+    api.post('/auth/register/company', { companyName, email, password, name, country }),
   register: (name, email, password, role = 'counselor') =>
     api.post('/auth/register', { name, email, password, role }),
   login: (email, password) =>
     api.post('/auth/login', { email, password }),
+};
+
+// Lead endpoints
+export const leadAPI = {
+  getLeads: () => api.get('/leads'),
+  createLead: (leadData) => api.post('/leads', leadData),
+  updateStatus: (id, status) => api.patch(`/leads/${id}/status`, { status }),
 };
 
 // Student endpoints
@@ -38,14 +47,24 @@ export const studentAPI = {
     }),
   getStudentById: (id) =>
     api.get(`/students/${id}`),
-  createStudent: (studentData) =>
-    api.post('/students', studentData),
-  updateStudent: (id, studentData) =>
-    api.put(`/students/${id}`, studentData),
-  deleteStudent: (id) =>
-    api.delete(`/students/${id}`),
-  assignCounselor: (studentId, counselorId) =>
-    api.put(`/students/${studentId}/assign-counselor`, { counselorId }),
+  updateStatus: (id, status) =>
+    api.patch(`/students/${id}/status`, { status }),
+};
+
+// Applicant (University Application) endpoints
+export const applicantAPI = {
+  getApplications: () => api.get('/applicants'),
+  createApplication: (data) => api.post('/applicants', data),
+  updateStatus: (id, status) => api.patch(`/applicants/${id}/status`, { status }),
+};
+
+
+// Invoice endpoints
+export const invoiceAPI = {
+  getInvoices: () => api.get('/invoices'),
+  createInvoice: (data) => api.post('/invoices', data),
+  updateStatus: (id, status, paymentMethod) => api.patch(`/invoices/${id}/status`, { status, paymentMethod }),
+  sendEmail: (id) => api.post(`/invoices/${id}/send-email`),
 };
 
 // Dashboard endpoints
@@ -54,4 +73,11 @@ export const dashboardAPI = {
     api.get('/dashboard/stats'),
 };
 
+// Company branding and settings
+export const companyAPI = {
+  getProfile: () => api.get('/company/profile'),
+  updateProfile: (data) => api.patch('/company/profile', data),
+};
+
 export default api;
+

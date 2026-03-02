@@ -7,6 +7,20 @@ require("dotenv").config();
 const helmet = require("helmet");
 const compression = require("compression");
 
+process.on("uncaughtException", (err) => {
+  console.log("UNCAUGHT EXCEPTION! 💥 Shutting down...");
+  console.log(err.name, err.message);
+  console.log(err.stack);
+  process.exit(1);
+});
+
+process.on("unhandledRejection", (err) => {
+  console.log("UNHANDLED REJECTION! 💥 Shutting down...");
+  console.log(err.name, err.message);
+  console.log(err.stack);
+  process.exit(1);
+});
+
 // ==================== 2. CREATE EXPRESS APP ====================
 const app = express();
 

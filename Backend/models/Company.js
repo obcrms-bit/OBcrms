@@ -12,7 +12,7 @@ const companySchema = new mongoose.Schema(
       // Format: COMP_[12 alphanumeric chars]
       // Example: COMP_ABC123XYZ456
     },
-    
+
     name: {
       type: String,
       required: [true, 'Company name is required'],
@@ -21,7 +21,7 @@ const companySchema = new mongoose.Schema(
       minlength: [3, 'Company name must be at least 3 characters'],
       maxlength: [100, 'Company name cannot exceed 100 characters'],
     },
-    
+
     email: {
       type: String,
       required: [true, 'Company email is required'],
@@ -29,35 +29,35 @@ const companySchema = new mongoose.Schema(
       lowercase: true,
       match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Invalid email format'],
     },
-    
+
     // Business Info
     industry: {
       type: String,
       enum: ['Education', 'Healthcare', 'Finance', 'Technology', 'Other'],
       default: 'Education',
     },
-    
+
     description: {
       type: String,
       maxlength: [500, 'Description cannot exceed 500 characters'],
     },
-    
+
     country: {
       type: String,
       required: true,
     },
-    
+
     timezone: {
       type: String,
       default: 'UTC',
       // Examples: 'Asia/Kolkata', 'America/New_York', 'Europe/London'
     },
-    
+
     website: {
       type: String,
       match: [/^https?:\/\/.+/, 'Invalid website URL'],
     },
-    
+
     // Subscription Management
     subscription: {
       plan: {
@@ -99,7 +99,7 @@ const companySchema = new mongoose.Schema(
         },
       ],
     },
-    
+
     // Plan Limits
     limits: {
       maxUsers: {
@@ -119,7 +119,7 @@ const companySchema = new mongoose.Schema(
         default: 5,
       },
     },
-    
+
     // Settings
     settings: {
       currency: {
@@ -141,7 +141,7 @@ const companySchema = new mongoose.Schema(
       allowCustomDomain: Boolean,
       customDomain: String,
     },
-    
+
     // Billing and Payment
     billing: {
       companyName: String,
@@ -157,7 +157,7 @@ const companySchema = new mongoose.Schema(
       cardExpiryYear: Number,
       invoicePrefix: String,
     },
-    
+
     // Usage Tracking
     usage: {
       activeUsers: {
@@ -178,7 +178,7 @@ const companySchema = new mongoose.Schema(
       },
       lastCalculatedDate: Date,
     },
-    
+
     // Status & Control
     isActive: {
       type: Boolean,
@@ -191,14 +191,14 @@ const companySchema = new mongoose.Schema(
       // Reason for pause: payment overdue, admin action, etc.
     },
     pauseReason: String,
-    
+
     // Admin Contact
     adminContact: {
       name: String,
       email: String,
       phone: String,
     },
-    
+
     // Relationships
     owner: {
       type: mongoose.Schema.Types.ObjectId,
@@ -206,7 +206,7 @@ const companySchema = new mongoose.Schema(
       required: false,
       // The user who created/owns this company
     },
-    
+
     // Audit & Compliance
     ssoEnabled: {
       type: Boolean,
@@ -221,10 +221,10 @@ const companySchema = new mongoose.Schema(
       type: Number,
       default: 2555, // 7 years default
     },
-    
+
     // Metadata
     metadata: mongoose.Schema.Types.Mixed,
-    
+
     // Timestamps
     createdAt: {
       type: Date,
@@ -243,8 +243,6 @@ const companySchema = new mongoose.Schema(
 );
 
 // Indexes for Performance
-companySchema.index({ companyId: 1 }, { unique: true });
-companySchema.index({ email: 1 }, { unique: true });
 companySchema.index({ isActive: 1 });
 companySchema.index({ 'subscription.status': 1 });
 companySchema.index({ owner: 1 });

@@ -7,6 +7,7 @@ dotenv.config({ path: __dirname + '/../.env' });
 
 const User = require('../models/user.model');
 const Student = require('../models/student.model');
+const Company = require('../models/Company');
 
 // helper to generate random elements
 function randomElement(arr) {
@@ -21,27 +22,51 @@ async function run() {
     // clear existing data (OPTIONAL)
     await User.deleteMany({});
     await Student.deleteMany({});
+    await Company.deleteMany({});
+
+    // create default company
+    const defaultCompany = await Company.create({
+      companyId: 'COMP_SEED_123',
+      name: 'Seed Education Group',
+      email: 'contact@seededu.com',
+      country: 'Nepal',
+      timezone: 'Asia/Kathmandu',
+      subscription: {
+        plan: 'professional',
+        status: 'active',
+      },
+      limits: {
+        maxUsers: 50,
+        maxStudents: 1000,
+        maxCounselors: 20
+      }
+    });
+    console.log('✅ Default Company created');
+
+    const companyId = defaultCompany._id;
 
     // create users
-    const adminPassword = await bcrypt.hash('admin123', 10);
+    // Model middleware handles hashing, so we pass plain text.
     const admin = await User.create({
+      companyId,
       name: 'Seed Admin',
       email: 'admin@seed.com',
-      password: adminPassword,
+      password: 'admin123',
       role: 'admin',
     });
 
-    const counselorPassword = await bcrypt.hash('counselor123', 10);
     const counselor1 = await User.create({
+      companyId,
       name: 'Counselor One',
       email: 'counselor1@seed.com',
-      password: counselorPassword,
+      password: 'counselor123',
       role: 'counselor',
     });
     const counselor2 = await User.create({
+      companyId,
       name: 'Counselor Two',
       email: 'counselor2@seed.com',
-      password: counselorPassword,
+      password: 'counselor123',
       role: 'counselor',
     });
 
@@ -61,6 +86,7 @@ async function run() {
 
       studentPromises.push(
         Student.create({
+          companyId,
           fullName,
           email,
           phone: '+100000000' + i,
@@ -76,6 +102,7 @@ async function run() {
       if (Math.random() < 0.5) {
         const counselor = Math.random() < 0.5 ? counselor1 : counselor2;
         student.assignedCounselor = counselor._id;
+        student.assignedCounselorName = counselor.name;
         await student.save();
       }
     }

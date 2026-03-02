@@ -20,6 +20,29 @@ export const AuthProvider = ({ children }) => {
     setLoading(false);
   }, []);
 
+  const registerCompany = async (companyName, email, password, name, country) => {
+    try {
+      setError(null);
+      const response = await authAPI.registerCompany(companyName, email, password, name, country);
+      if (response.data.success) {
+        const { token: newToken, user: userData } = response.data.data || {};
+        if (newToken && userData) {
+          setToken(newToken);
+          setUser(userData);
+          localStorage.setItem('token', newToken);
+          localStorage.setItem('user', JSON.stringify(userData));
+        }
+        return response.data;
+      } else {
+        throw new Error(response.data.message);
+      }
+    } catch (err) {
+      const message = err.response?.data?.message || err.message || 'Company registration failed';
+      setError(message);
+      throw err;
+    }
+  };
+
   const register = async (name, email, password, role = 'counselor') => {
     try {
       setError(null);
@@ -68,7 +91,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, error, register, login, logout }}>
+    <AuthContext.Provider value={{ user, token, loading, error, registerCompany, register, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

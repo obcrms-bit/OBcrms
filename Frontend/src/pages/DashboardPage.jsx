@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import {
     Users, Globe, GraduationCap, Phone, BookOpen, FileText,
-    Filter, RotateCcw, ChevronLeft, ChevronRight, User as UserIcon, Clock
+    Filter, RotateCcw, ChevronLeft, ChevronRight, User as UserIcon, Clock,
+    Search, Calendar
 } from 'lucide-react';
 
 const KPICard = ({ icon: Icon, title, value, colorClass, bgColorClass }) => (
@@ -83,8 +84,8 @@ const DashboardPage = () => {
                                     key={tab}
                                     onClick={() => setActiveTab(tab)}
                                     className={`text-left px-4 py-3 text-sm font-medium transition-colors ${activeTab === tab
-                                            ? 'bg-blue-500 text-white rounded-r-lg mr-2'
-                                            : 'text-gray-600 hover:bg-gray-50'
+                                        ? 'bg-blue-500 text-white rounded-r-lg mr-2'
+                                        : 'text-gray-600 hover:bg-gray-50'
                                         }`}
                                 >
                                     {tab}

@@ -19,12 +19,21 @@ const ProtectedRoute = ({ children, requiredRole }) => {
     return <Navigate to="/login" />;
   }
 
-  if (requiredRole && user.role !== requiredRole) {
+  const roles = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
+
+  if (requiredRole && user.role !== 'admin' && !roles.includes(user.role)) {
     return <Navigate to="/login" />;
   }
 
   return children;
 };
+
+
+import LeadsPage from './pages/LeadsPage';
+import StudentsPage from './pages/StudentsPage';
+import ApplicantsPage from './pages/ApplicantsPage';
+import InvoicesPage from './pages/InvoicesPage';
+import SettingsPage from './pages/SettingsPage';
 
 function AppContent() {
   const { user } = useAuth();
@@ -35,7 +44,7 @@ function AppContent() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
 
-          {/* We replace the old AdminDashboard and CounselorDashboard with the new DashboardLayout */}
+          {/* Admin Routes */}
           <Route
             path="/admin"
             element={
@@ -45,8 +54,14 @@ function AppContent() {
             }
           >
             <Route index element={<DashboardPage />} />
+            <Route path="leads" element={<LeadsPage />} />
+            <Route path="students" element={<StudentsPage />} />
+            <Route path="applicants" element={<ApplicantsPage />} />
+            <Route path="invoices" element={<InvoicesPage />} />
+            <Route path="settings" element={<SettingsPage />} />
           </Route>
 
+          {/* Counselor Routes */}
           <Route
             path="/counselor"
             element={
@@ -56,28 +71,80 @@ function AppContent() {
             }
           >
             <Route index element={<DashboardPage />} />
+            <Route path="leads" element={<LeadsPage />} />
+            <Route path="students" element={<StudentsPage />} />
+            <Route path="applicants" element={<ApplicantsPage />} />
+          </Route>
+
+          {/* Sales Routes */}
+          <Route
+            path="/sales"
+            element={
+              <ProtectedRoute requiredRole="sales">
+                <DashboardLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<DashboardPage />} />
+            <Route path="leads" element={<LeadsPage />} />
+            <Route path="students" element={<StudentsPage />} />
+          </Route>
+
+          {/* Accountant Routes */}
+          <Route
+            path="/accountant"
+            element={
+              <ProtectedRoute requiredRole="accountant">
+                <DashboardLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<DashboardPage />} />
+            <Route path="invoices" element={<InvoicesPage />} />
+          </Route>
+
+          {/* Manager Routes */}
+          <Route
+            path="/manager"
+            element={
+              <ProtectedRoute requiredRole="manager">
+                <DashboardLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<DashboardPage />} />
+            <Route path="leads" element={<LeadsPage />} />
+            <Route path="students" element={<StudentsPage />} />
+            <Route path="applicants" element={<ApplicantsPage />} />
+            <Route path="invoices" element={<InvoicesPage />} />
+            <Route path="settings" element={<SettingsPage />} />
           </Route>
 
           <Route
             path="/"
             element={
               user ? (
-                <Navigate to={user.role === 'admin' ? '/admin' : '/counselor'} />
+                <Navigate to={`/${user.role}`} />
               ) : (
                 <Navigate to="/login" />
               )
             }
           />
+
         </Routes>
       </div>
     </Router>
   );
 }
 
+import { BrandingProvider } from './context/BrandingContext';
+
 function App() {
   return (
     <AuthProvider>
-      <AppContent />
+      <BrandingProvider>
+        <AppContent />
+      </BrandingProvider>
     </AuthProvider>
   );
 }

@@ -29,6 +29,12 @@ function LoginPage() {
           navigate('/admin');
         } else if (userRole === 'counselor') {
           navigate('/counselor');
+        } else if (userRole === 'manager') {
+          navigate('/manager');
+        } else if (userRole === 'sales') {
+          navigate('/sales');
+        } else if (userRole === 'accountant') {
+          navigate('/accountant');
         } else {
           setError('Invalid user role. Please contact support.');
         }

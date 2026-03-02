@@ -1,4 +1,10 @@
 {
+  "name": "trust-education-crm-erp",
+  "version": "1.0.0",
+  "scripts": {
+    "install:frontend": "cd Frontend && npm install",
+    "build:frontend": "cd Frontend && npm run build"
+  },
   "devDependencies": {
     "nodemon": "^3.1.14"
   }
