@@ -101,6 +101,8 @@ const leadRoutes = require("./routes/lead.routes");
 const invoiceRoutes = require("./routes/invoice.routes");
 const companyRoutes = require("./routes/company.routes");
 const dashboardRoutes = require("./routes/dashboard.routes");
+const branchRoutes = require("./routes/branchRoutes");
+const agentRoutes = require("./routes/agent.routes");
 
 // ==================== 10. MOUNT ROUTES ====================
 app.use("/api/auth", authRoutes);
@@ -110,6 +112,8 @@ app.use("/api/leads", leadRoutes);
 app.use("/api/invoices", invoiceRoutes);
 app.use("/api/company", companyRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/branches", branchRoutes);
+app.use("/api/agents", agentRoutes);
 
 // ==================== 11. 404 HANDLER ====================
 app.use((req, res) => {

@@ -5,12 +5,14 @@ const AuditLog = require("../models/AuditLog");
 const PDFService = require("../utils/PDFService");
 const EmailService = require("../utils/EmailService");
 const { sendSuccess, sendError } = require("../utils/responseHandler");
+const mongoose = require("mongoose");
 
 exports.createInvoice = async (req, res) => {
     try {
         const { studentId, applicantId, items, subTotal, taxPercentage, totalAmount, currency, dueDate } = req.body;
+        const companyObjectId = new mongoose.Types.ObjectId(req.companyId);
 
-        const student = await Student.findOne({ _id: studentId, companyId: req.companyId });
+        const student = await Student.findOne({ _id: studentId, companyId: companyObjectId });
         if (!student) return sendError(res, 404, "Student not found");
 
         // Generate invoice number
@@ -51,7 +53,8 @@ exports.createInvoice = async (req, res) => {
 exports.sendInvoiceEmail = async (req, res) => {
     try {
         const { id } = req.params;
-        const invoice = await Invoice.findOne({ _id: id, companyId: req.companyId }).populate("studentId");
+        const companyObjectId = new mongoose.Types.ObjectId(req.companyId);
+        const invoice = await Invoice.findOne({ _id: id, companyId: companyObjectId }).populate("studentId");
         if (!invoice) return sendError(res, 404, "Invoice not found");
 
         const student = invoice.studentId;
@@ -98,7 +101,8 @@ exports.sendInvoiceEmail = async (req, res) => {
 
 exports.getInvoices = async (req, res) => {
     try {
-        const invoices = await Invoice.find({ companyId: req.companyId }).populate("studentId").sort({ createdAt: -1 });
+        const companyObjectId = new mongoose.Types.ObjectId(req.companyId);
+        const invoices = await Invoice.find({ companyId: companyObjectId }).populate("studentId").sort({ createdAt: -1 });
         return sendSuccess(res, 200, "Invoices retrieved successfully", invoices);
     } catch (error) {
         return sendError(res, 500, "Failed to fetch invoices", error.message);
@@ -109,8 +113,9 @@ exports.updateInvoiceStatus = async (req, res) => {
     try {
         const { id } = req.params;
         const { status, paymentMethod } = req.body;
+        const companyObjectId = new mongoose.Types.ObjectId(req.companyId);
 
-        const invoice = await Invoice.findOne({ _id: id, companyId: req.companyId });
+        const invoice = await Invoice.findOne({ _id: id, companyId: companyObjectId });
         if (!invoice) return sendError(res, 404, "Invoice not found");
 
         const oldStatus = invoice.status;

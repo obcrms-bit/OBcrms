@@ -2,11 +2,13 @@ const Student = require("../models/Student");
 const AuditLog = require("../models/AuditLog");
 const { sendSuccess, sendError } = require("../utils/responseHandler");
 const { isValidTransition } = require("../constants/workflow");
+const mongoose = require("mongoose");
 
 exports.getStudents = async (req, res) => {
   try {
     const { page = 1, limit = 10, search = "" } = req.query;
-    const query = { companyId: req.companyId, deletedAt: null };
+    const companyObjectId = new mongoose.Types.ObjectId(req.companyId);
+    const query = { companyId: companyObjectId, deletedAt: null };
 
     if (search) {
       query.$or = [
@@ -35,7 +37,11 @@ exports.getStudents = async (req, res) => {
 
 exports.getStudentById = async (req, res) => {
   try {
-    const student = await Student.findOne({ _id: req.params.id, companyId: req.companyId, deletedAt: null });
+    const student = await Student.findOne({
+      _id: req.params.id,
+      companyId: new mongoose.Types.ObjectId(req.companyId),
+      deletedAt: null
+    });
     if (!student) return sendError(res, 404, "Student not found");
     return sendSuccess(res, 200, "Student details retrieved", student);
   } catch (error) {
@@ -47,7 +53,7 @@ exports.createStudent = async (req, res) => {
   try {
     const student = await Student.create({
       ...req.body,
-      companyId: req.companyId,
+      companyId: new mongoose.Types.ObjectId(req.companyId),
     });
 
     await AuditLog.logAction({
@@ -70,7 +76,7 @@ exports.createStudent = async (req, res) => {
 exports.updateStudent = async (req, res) => {
   try {
     const student = await Student.findOneAndUpdate(
-      { _id: req.params.id, companyId: req.companyId },
+      { _id: req.params.id, companyId: new mongoose.Types.ObjectId(req.companyId) },
       { $set: req.body },
       { new: true, runValidators: true }
     );
@@ -98,7 +104,7 @@ exports.updateStudent = async (req, res) => {
 exports.deleteStudent = async (req, res) => {
   try {
     const student = await Student.findOneAndUpdate(
-      { _id: req.params.id, companyId: req.companyId },
+      { _id: req.params.id, companyId: new mongoose.Types.ObjectId(req.companyId) },
       { deletedAt: new Date() },
       { new: true }
     );
@@ -126,8 +132,9 @@ exports.updateStudentStatus = async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
+    const companyObjectId = new mongoose.Types.ObjectId(req.companyId);
 
-    const student = await Student.findOne({ _id: id, companyId: req.companyId });
+    const student = await Student.findOne({ _id: id, companyId: companyObjectId });
     if (!student) return sendError(res, 404, "Student not found");
 
     if (!isValidTransition("STUDENT", student.status, status)) {

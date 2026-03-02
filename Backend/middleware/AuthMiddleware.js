@@ -16,18 +16,28 @@ exports.protect = async (req, res, next) => {
     const decoded = jwt.verify(token, JWT_SECRET);
 
     // decoded contains { userId, companyId, role, ... }
-    const user = await User.findById(decoded.userId).select("-password");
+    const user = await User.findById(decoded.userId).select("-password").populate("companyId");
     if (!user) {
       return sendError(res, 401, "User not found");
     }
 
     // Multi-tenancy check
-    if (user.companyId.toString() !== decoded.companyId) {
+    // Ensure company matches and is active
+    const company = user.companyId;
+    if (!company) {
+      return sendError(res, 403, "Access denied: company context missing");
+    }
+
+    if (!company.isActive) {
+      return sendError(res, 403, "Access denied: company is inactive");
+    }
+
+    if (company._id.toString() !== decoded.companyId) {
       return sendError(res, 403, "Access denied: tenant mismatch");
     }
 
     req.user = user;
-    req.companyId = user.companyId.toString();
+    req.companyId = company._id.toString();
     next();
   } catch (error) {
     sendError(res, 401, "Invalid or expired token", error.message);
