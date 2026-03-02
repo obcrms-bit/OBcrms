@@ -32,7 +32,7 @@ const extractTenant = async (req, res, next) => {
     const token = authHeader.split(" ")[1];
 
     // Step 2: Verify JWT with signature
-    const JWT_SECRET = process.env.JWT_SECRET || "replace_this_with_a_secure_secret";
+    const JWT_SECRET = process.env.JWT_SECRET;
     const decoded = jwt.verify(token, JWT_SECRET);
 
     if (!decoded.userId || !decoded.companyId) {

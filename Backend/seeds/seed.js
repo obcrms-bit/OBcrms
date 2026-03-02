@@ -1,121 +1,93 @@
 const mongoose = require('mongoose');
-const bcrypt = require('bcrypt');
 const dotenv = require('dotenv');
+const path = require('path');
 
-// load environment variables from .env in the backend directory
-dotenv.config({ path: __dirname + '/../.env' });
+// Load environment variables from .env in the backend directory
+dotenv.config({ path: path.join(__dirname, '../.env') });
 
-const User = require('../models/user.model');
-const Student = require('../models/student.model');
+const User = require('../models/User');
+const Student = require('../models/Student');
+const Lead = require('../models/Lead');
 const Company = require('../models/Company');
-
-// helper to generate random elements
-function randomElement(arr) {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
 
 async function run() {
   try {
+    if (!process.env.MONGO_URI) {
+      throw new Error("MONGO_URI is not defined in .env file");
+    }
+
     await mongoose.connect(process.env.MONGO_URI);
     console.log('✅ MongoDB connected for seeding');
 
-    // clear existing data (OPTIONAL)
-    await User.deleteMany({});
-    await Student.deleteMany({});
-    await Company.deleteMany({});
+    // Optional: Only clear if requested via flag, but for a fresh "Go Live" start, we might want to skip clearing
+    // await User.deleteMany({});
+    // await Student.deleteMany({});
+    // await Company.deleteMany({});
+    // await Lead.deleteMany({});
 
-    // create default company
-    const defaultCompany = await Company.create({
-      companyId: 'COMP_SEED_123',
-      name: 'Seed Education Group',
-      email: 'contact@seededu.com',
-      country: 'Nepal',
-      timezone: 'Asia/Kathmandu',
-      subscription: {
-        plan: 'professional',
-        status: 'active',
-      },
-      limits: {
-        maxUsers: 50,
-        maxStudents: 1000,
-        maxCounselors: 20
-      }
-    });
-    console.log('✅ Default Company created');
-
-    const companyId = defaultCompany._id;
-
-    // create users
-    // Model middleware handles hashing, so we pass plain text.
-    const admin = await User.create({
-      companyId,
-      name: 'Seed Admin',
-      email: 'admin@seed.com',
-      password: 'admin123',
-      role: 'admin',
-    });
-
-    const counselor1 = await User.create({
-      companyId,
-      name: 'Counselor One',
-      email: 'counselor1@seed.com',
-      password: 'counselor123',
-      role: 'counselor',
-    });
-    const counselor2 = await User.create({
-      companyId,
-      name: 'Counselor Two',
-      email: 'counselor2@seed.com',
-      password: 'counselor123',
-      role: 'counselor',
-    });
-
-    console.log('✅ Users created: admin + 2 counselors');
-
-    // possible statuses
-    const statuses = ['New', 'Processing', 'Applied', 'Visa Approved', 'Rejected'];
-    const countries = ['Canada', 'USA', 'UK', 'Australia', 'Germany'];
-
-    // generate 20 students
-    const studentPromises = [];
-    for (let i = 1; i <= 20; i++) {
-      const fullName = `Student ${i}`;
-      const email = `student${i}@seed.com`;
-      const status = randomElement(statuses);
-      const country = randomElement(countries);
-
-      studentPromises.push(
-        Student.create({
-          companyId,
-          fullName,
-          email,
-          phone: '+100000000' + i,
-          countryInterested: country,
-          status,
-        })
-      );
-    }
-    const students = await Promise.all(studentPromises);
-
-    // assign half to counselors randomly
-    for (const student of students) {
-      if (Math.random() < 0.5) {
-        const counselor = Math.random() < 0.5 ? counselor1 : counselor2;
-        student.assignedCounselor = counselor._id;
-        student.assignedCounselorName = counselor.name;
-        await student.save();
-      }
+    // 1. Create Default Company
+    let company = await Company.findOne({ email: 'contact@trustedu.com' });
+    if (!company) {
+      company = await Company.create({
+        companyId: 'TRUST_HQ_001',
+        name: 'Trust Education Group',
+        email: 'contact@trustedu.com',
+        country: 'Nepal',
+        timezone: 'Asia/Kathmandu',
+        subscription: { plan: 'professional', status: 'active' },
+        limits: { maxUsers: 100, maxStudents: 5000, maxCounselors: 50 }
+      });
+      console.log('✅ Default Company created');
     }
 
-    console.log('✅ Students created and some assigned to counselors');
-    console.log('Seed finished. You can now login with the following credentials:');
-    console.log(' - Admin: admin@seed.com / admin123');
-    console.log(' - Counselor1: counselor1@seed.com / counselor123');
-    console.log(' - Counselor2: counselor2@seed.com / counselor123');
+    // 2. Create Admin User
+    let admin = await User.findOne({ email: 'admin@trust.com' });
+    if (!admin) {
+      admin = await User.create({
+        companyId: company._id,
+        name: 'Trust Admin',
+        email: 'admin@trust.com',
+        password: 'AdminPassword123!', // Note: User model pre-save hashes this
+        role: 'admin',
+        isActive: true
+      });
+      console.log('✅ Admin User created (admin@trust.com / AdminPassword123!)');
+    }
+
+    // 3. Create a Sample Lead
+    const sampleLead = await Lead.create({
+      companyId: company._id,
+      name: 'Sample Lead',
+      email: 'lead@example.com',
+      phone: '+9779800000000',
+      source: 'Facebook',
+      status: 'new',
+      interestedCountry: 'Australia',
+      interestedCourse: 'Nursing',
+      priority: 'high'
+    });
+    console.log('✅ Sample Lead created');
+
+    // 4. Create a Sample Student
+    const sampleStudent = await Student.create({
+      companyId: company._id,
+      leadId: sampleLead._id,
+      fullName: 'Sample Student',
+      email: 'student@example.com',
+      phone: '+9779811111111',
+      status: 'prospect',
+      countryInterested: 'Australia',
+      source: 'Facebook'
+    });
+    console.log('✅ Sample Student created');
+
+    console.log('\n--- SEEDING COMPLETE ---');
+    console.log('Login URL: /login');
+    console.log('Credentials: admin@trust.com / AdminPassword123!');
 
     process.exit(0);
   } catch (err) {
-    console.error('❌ Seed error', err);
+    console.error('❌ Seed error:', err.message);
     process.exit(1);
   }
 }

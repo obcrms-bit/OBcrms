@@ -33,7 +33,7 @@ const auditLogSchema = new mongoose.Schema(
 
     resource: {
       type: String,
-      enum: ["student", "user", "lead", "application", "report", "company", "settings"],
+      enum: ["student", "user", "lead", "application", "report", "company", "settings", "invoice"],
       required: true,
       index: true,
     },

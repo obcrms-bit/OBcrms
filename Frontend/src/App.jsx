@@ -1,39 +1,53 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { BrandingProvider } from './context/BrandingContext';
+
+// Pages
 import LoginPage from './pages/LoginPage';
-import DashboardLayout from './components/Layout/DashboardLayout';
-import DashboardPage from './pages/DashboardPage';
-import './styles/globals.css';
-import './App.css';
-
-// Protected route wrapper
-const ProtectedRoute = ({ children, requiredRole }) => {
-  const { user, loading } = useAuth();
-
-  if (loading) {
-    return <div className="loading flex items-center justify-center h-screen bg-white">Loading...</div>;
-  }
-
-  if (!user) {
-    return <Navigate to="/login" />;
-  }
-
-  const roles = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
-
-  if (requiredRole && user.role !== 'admin' && !roles.includes(user.role)) {
-    return <Navigate to="/login" />;
-  }
-
-  return children;
-};
-
-
 import LeadsPage from './pages/LeadsPage';
 import StudentsPage from './pages/StudentsPage';
 import ApplicantsPage from './pages/ApplicantsPage';
 import InvoicesPage from './pages/InvoicesPage';
 import SettingsPage from './pages/SettingsPage';
+import DashboardPage from './pages/DashboardPage';
+
+// Layout
+import DashboardLayout from './components/Layout/DashboardLayout';
+
+// Styles
+import './styles/globals.css';
+import './App.css';
+
+// Protected route wrapper — redirects to /login if not authenticated or wrong role
+const ProtectedRoute = ({ children, requiredRole }) => {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#f9fafb' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ width: 40, height: 40, border: '4px solid #e5e7eb', borderTop: '4px solid #667eea', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 12px' }} />
+          <p style={{ color: '#6b7280', fontSize: 14 }}>Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (requiredRole) {
+    const roles = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
+    // super_admin can access any route
+    if (user.role !== 'super_admin' && !roles.includes(user.role)) {
+      return <Navigate to="/login" replace />;
+    }
+  }
+
+  return children;
+};
 
 function AppContent() {
   const { user } = useAuth();
@@ -42,13 +56,14 @@ function AppContent() {
     <Router>
       <div className="app w-full h-full">
         <Routes>
+          {/* Public */}
           <Route path="/login" element={<LoginPage />} />
 
           {/* Admin Routes */}
           <Route
             path="/admin"
             element={
-              <ProtectedRoute requiredRole="admin">
+              <ProtectedRoute requiredRole={['admin', 'super_admin']}>
                 <DashboardLayout />
               </ProtectedRoute>
             }
@@ -120,24 +135,34 @@ function AppContent() {
             <Route path="settings" element={<SettingsPage />} />
           </Route>
 
+          {/* Default: redirect based on role, or to login */}
           <Route
             path="/"
             element={
               user ? (
-                <Navigate to={`/${user.role}`} />
+                <Navigate to={`/${user.role === 'super_admin' ? 'admin' : user.role}`} replace />
               ) : (
-                <Navigate to="/login" />
+                <Navigate to="/login" replace />
               )
             }
           />
 
+          {/* Catch-all 404 */}
+          <Route
+            path="*"
+            element={
+              user ? (
+                <Navigate to={`/${user.role === 'super_admin' ? 'admin' : user.role}`} replace />
+              ) : (
+                <Navigate to="/login" replace />
+              )
+            }
+          />
         </Routes>
       </div>
     </Router>
   );
 }
-
-import { BrandingProvider } from './context/BrandingContext';
 
 function App() {
   return (

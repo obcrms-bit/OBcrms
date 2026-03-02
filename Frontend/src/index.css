@@ -2,6 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --primary-color: #1890ff;
+  --primary-light: #40a9ff;
+  --sidebar-active-bg: #e6f7ff;
+  --bg-color: #f5f7fa;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -15,6 +22,27 @@ html, body, #root {
 
 body {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background-color: #f5f7fa;
+  background-color: var(--bg-color);
   color: #333;
+}
+
+.bg-primary {
+  background-color: var(--primary-color) !important;
+}
+
+.text-primary {
+  color: var(--primary-color) !important;
+}
+
+.border-primary {
+  border-color: var(--primary-color) !important;
+}
+
+.hover-bg-primary:hover {
+  background-color: var(--primary-light) !important;
+}
+
+/* Custom transitions */
+.transition-branding {
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
 }

@@ -1,11 +1,24 @@
 {
   "name": "trust-education-crm-erp",
-  "version": "1.0.0",
+  "version": "1.0.1",
+  "description": "Enterprise CRM/ERP for Education Consultancy",
   "scripts": {
+    "postinstall": "npm run install:backend && npm run install:frontend",
+    "install:backend": "cd Backend && npm install",
     "install:frontend": "cd Frontend && npm install",
-    "build:frontend": "cd Frontend && npm run build"
+    "build:frontend": "cd Frontend && npm run build",
+    "start:backend": "cd Backend && npm start",
+    "seed:backend": "cd Backend && npm run seed",
+    "dev:backend": "cd Backend && npm run dev",
+    "dev:frontend": "cd Frontend && npm start",
+    "test:system": "cd Backend && node integration_test.js"
   },
-  "devDependencies": {
-    "nodemon": "^3.1.14"
-  }
+  "keywords": [
+    "crm",
+    "erp",
+    "education",
+    "consultancy"
+  ],
+  "author": "Trust Education",
+  "license": "ISC"
 }

@@ -1,10 +1,14 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-const User = require("../models/user.model");
+const User = require("../models/User");
 const Company = require("../models/Company");
 const { sendSuccess, sendError } = require("../utils/responseHandler");
 
-const JWT_SECRET = process.env.JWT_SECRET || "replace_this_with_a_secure_secret";
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error("FATAL: JWT_SECRET environment variable is not set!");
+  process.exit(1);
+}
 const TOKEN_EXPIRES = "7d";
 
 // ==================== COMPANY REGISTRATION ====================
@@ -140,10 +144,11 @@ exports.register = async (req, res) => {
     // Normalize role to lowercase
     const normalizedRole = role ? role.toLowerCase() : "counselor";
 
-    // Validate role (only admin/manager/counselor, not super_admin)
-    if (!["admin", "manager", "counselor"].includes(normalizedRole)) {
-      return sendError(res, 400, "Invalid role. Allowed: admin, manager, counselor");
+    // Validate role
+    if (!["admin", "manager", "counselor", "sales", "accountant"].includes(normalizedRole)) {
+      return sendError(res, 400, "Invalid role. Allowed: admin, manager, counselor, sales, accountant");
     }
+
 
     // NOTE: Don't hash here - let the User pre-save hook handle it
     const user = new User({
@@ -240,3 +245,41 @@ exports.logout = async (req, res) => {
   }
 };
 
+// ==================== GET ME ====================
+// Returns the authenticated user's profile
+exports.getMe = async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return sendError(res, 401, "Authorization token missing");
+    }
+    const token = authHeader.split(" ")[1];
+
+    let decoded;
+    try {
+      decoded = jwt.verify(token, JWT_SECRET);
+    } catch (e) {
+      return sendError(res, 401, "Invalid or expired token");
+    }
+
+    const user = await User.findById(decoded.userId).select("-password");
+    if (!user) {
+      return sendError(res, 404, "User not found");
+    }
+
+    if (!user.isActive) {
+      return sendError(res, 401, "User account is inactive");
+    }
+
+    sendSuccess(res, 200, "User profile retrieved", {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      companyId: user.companyId,
+      isActive: user.isActive,
+    });
+  } catch (error) {
+    sendError(res, 500, "Failed to get profile", error.message);
+  }
+};
