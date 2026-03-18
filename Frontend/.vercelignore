@@ -1,0 +1,16 @@
+.next/cache
+.next/traces
+node_modules/
+build_errors*.log
+*.swp
+*.swo
+.DS_Store
+.idea/
+.vscode/
+.git/
+.env.local
+.env.development.local
+.env.production.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

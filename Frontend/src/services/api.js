@@ -1,7 +1,10 @@
 import axios from 'axios';
 
-// Supports both Create React App (REACT_APP_) prefix
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+// Support both NEXT_PUBLIC_API_URL (Next.js) and REACT_APP_API_URL (fallback for CRA)
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  process.env.REACT_APP_API_URL ||
+  'http://localhost:5000/api';
 
 // Create axios instance with base URL
 const api = axios.create({
@@ -13,8 +16,11 @@ const api = axios.create({
 // Request interceptor: Attach JWT token to every request
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
-    if (token) config.headers.Authorization = `Bearer ${token}`;
+    // Only access localStorage on client side
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('token');
+      if (token) config.headers.Authorization = `Bearer ${token}`;
+    }
     return config;
   },
   (error) => Promise.reject(error)
@@ -25,11 +31,14 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      const currentPath = window.location.pathname;
-      if (currentPath !== '/login') {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        window.location.href = '/login';
+      // Only access window/localStorage on client side
+      if (typeof window !== 'undefined') {
+        const currentPath = window.location.pathname;
+        if (currentPath !== '/login') {
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          window.location.href = '/login';
+        }
       }
     }
     return Promise.reject(error);

@@ -24,7 +24,7 @@ export default function KPICards() {
 
   const fetchKPIData = async () => {
     try {
-      const response = await dashboardAPI.getStats();
+      const response = await dashboardAPI.getDashboardStats();
       const data = response.data.data;
 
       // Map API data to KPI format

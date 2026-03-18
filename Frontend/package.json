@@ -4,6 +4,7 @@
   "description": "Education CRM Frontend",
   "private": true,
   "dependencies": {
+    "@fullcalendar/core": "^6.1.20",
     "@fullcalendar/daygrid": "^6.1.20",
     "@fullcalendar/interaction": "^6.1.20",
     "@fullcalendar/react": "^6.1.20",
@@ -61,7 +62,7 @@
     ]
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
+    "@eslint/js": "^9.39.4",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",

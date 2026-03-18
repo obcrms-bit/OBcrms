@@ -1,26 +1,18 @@
 {
     "version": 2,
-    "builds": [
-        {
-            "src": "Backend/server.js",
-            "use": "@vercel/node"
-        },
-        {
-            "src": "Frontend/package.json",
-            "use": "@vercel/static-build",
-            "config": {
-                "distDir": "build"
-            }
-        }
-    ],
+    "buildCommand": "npm run build",
+    "devCommand": "npm run dev",
+    "installCommand": "npm ci",
+    "framework": "nextjs",
+    "env": {
+        "NEXT_PUBLIC_API_URL": "@api_url",
+        "NEXT_PUBLIC_APP_NAME": "@app_name"
+    },
+    "envPrefix": "NEXT_PUBLIC_",
     "rewrites": [
         {
-            "source": "/api/(.*)",
-            "destination": "/Backend/server.js"
-        },
-        {
-            "source": "/(.*)",
-            "destination": "/Frontend/$1"
+            "source": "/:path*",
+            "destination": "/:path*"
         }
     ]
 }

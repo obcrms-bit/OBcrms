@@ -820,10 +820,10 @@ const LeadDetailPage = () => {
               <Star size={28} className="text-green-500" />
             </div>
             <h3 className="text-lg font-black text-gray-800 mb-2">
-              Convert to Student?
+              Convert to Student&apos;?
             </h3>
             <p className="text-xs text-gray-500 mb-6">
-              A student profile will be created from this lead's data.
+              A student profile will be created from this lead&apos;s data.
             </p>
             <div className="flex gap-3">
               <button

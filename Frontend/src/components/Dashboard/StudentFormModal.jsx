@@ -167,8 +167,8 @@ const StudentFormModal = ({
               className="select-field w-full"
             >
               <option value="">Select a course</option>
-              <option value="Bachelor's">Bachelor's</option>
-              <option value="Master's">Master's</option>
+              <option value="Bachelor's">Bachelor&apos;s</option>
+              <option value="Master's">Master&apos;s</option>
               <option value="Diploma">Diploma</option>
               <option value="Certificate">Certificate</option>
               <option value="Other">Other</option>

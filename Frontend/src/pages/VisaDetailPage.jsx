@@ -968,7 +968,8 @@ const VisaDetailPage = () => {
                 <Shield size={48} className="mx-auto mb-3 opacity-30" />
                 <p className="font-bold text-sm">No risk assessment run yet</p>
                 <p className="text-xs mt-1">
-                  Click "Run Risk Assessment" to evaluate this application
+                  Click &quot;Run Risk Assessment&quot; to evaluate this
+                  application
                 </p>
               </div>
             )}
