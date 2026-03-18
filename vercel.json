@@ -8,7 +8,6 @@
         "NEXT_PUBLIC_API_URL": "@api_url",
         "NEXT_PUBLIC_APP_NAME": "@app_name"
     },
-    "envPrefix": "NEXT_PUBLIC_",
     "rewrites": [
         {
             "source": "/:path*",
