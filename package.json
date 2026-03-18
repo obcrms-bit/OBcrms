@@ -1,51 +1,51 @@
 {
-  "name": "trust-education-crm-erp",
-  "version": "1.0.1",
-  "description": "Enterprise CRM/ERP for Education Consultancy",
-  "dependencies": {
-    "compression": "^1.7.4",
-    "cors": "^2.8.5",
-    "express": "^4.18.2",
-    "helmet": "^7.0.0",
-    "mongoose": "^7.5.0",
-    "morgan": "^1.10.0"
-  },
-  "scripts": {
-    "postinstall": "npm run install:backend && npm run install:frontend",
-    "install:backend": "cd Backend && npm install --legacy-peer-deps",
-    "install:frontend": "cd Frontend && npm install --legacy-peer-deps",
-    "build": "npm run build:frontend && npm run build:backend",
-    "build:frontend": "cd Frontend && npm run build",
-    "build:backend": "cd Backend && npm run build",
-    "start": "npm run start:backend",
-    "start:backend": "cd Backend && npm start",
-    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
-    "seed:backend": "cd Backend && npm run seed",
-    "dev:backend": "cd Backend && npm run dev",
-    "dev:frontend": "cd Frontend && npm run dev",
-    "lint": "npm run lint:backend && npm run lint:frontend",
-    "lint:backend": "cd Backend && npm run lint",
-    "lint:frontend": "cd Frontend && npm run lint",
-    "lint:fix": "npm run lint:fix:backend && npm run lint:fix:frontend",
-    "lint:fix:backend": "cd Backend && npm run lint:fix",
-    "lint:fix:frontend": "cd Frontend && npm run lint:fix",
-    "format": "npm run format:backend && npm run format:frontend",
-    "format:backend": "cd Backend && npm run format",
-    "format:frontend": "cd Frontend && npm run format",
-    "test:system": "cd Backend && node integration_test.js",
-    "prepare": "husky install"
-  },
-  "keywords": [
-    "crm",
-    "erp",
-    "education",
-    "consultancy"
-  ],
-  "author": "Trust Education",
-  "license": "ISC",
-  "devDependencies": {
-    "@eslint/js": "^9.39.4",
-    "eslint": "^10.0.3",
-    "husky": "^9.1.7"
-  }
+    "name":  "trust-education-crm-erp",
+    "version":  "1.0.1",
+    "description":  "Enterprise CRM/ERP for Education Consultancy",
+    "dependencies":  {
+                         "compression":  "^1.7.4",
+                         "cors":  "^2.8.5",
+                         "express":  "^4.18.2",
+                         "helmet":  "^7.0.0",
+                         "mongoose":  "^7.5.0",
+                         "morgan":  "^1.10.0"
+                     },
+    "scripts":  {
+                    "postinstall":  "npm run install:backend \u0026\u0026 npm run install:frontend",
+                    "install:backend":  "cd Backend \u0026\u0026 npm install --legacy-peer-deps",
+                    "install:frontend":  "cd Frontend \u0026\u0026 npm install --legacy-peer-deps",
+                    "build":  "next build",
+                    "build:frontend":  "cd Frontend \u0026\u0026 npm run build",
+                    "build:backend":  "cd Backend \u0026\u0026 npm run build",
+                    "start":  "node server.js",
+                    "start:backend":  "cd Backend \u0026\u0026 npm start",
+                    "dev":  "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+                    "seed:backend":  "cd Backend \u0026\u0026 npm run seed",
+                    "dev:backend":  "cd Backend \u0026\u0026 npm run dev",
+                    "dev:frontend":  "cd Frontend \u0026\u0026 npm run dev",
+                    "lint":  "eslint . --ext .js,.ts,.jsx,.tsx",
+                    "lint:backend":  "cd Backend \u0026\u0026 npm run lint",
+                    "lint:frontend":  "cd Frontend \u0026\u0026 npm run lint",
+                    "lint:fix":  "npm run lint:fix:backend \u0026\u0026 npm run lint:fix:frontend",
+                    "lint:fix:backend":  "cd Backend \u0026\u0026 npm run lint:fix",
+                    "lint:fix:frontend":  "cd Frontend \u0026\u0026 npm run lint:fix",
+                    "format":  "npm run format:backend \u0026\u0026 npm run format:frontend",
+                    "format:backend":  "cd Backend \u0026\u0026 npm run format",
+                    "format:frontend":  "cd Frontend \u0026\u0026 npm run format",
+                    "test:system":  "cd Backend \u0026\u0026 node integration_test.js",
+                    "prepare":  "husky install"
+                },
+    "keywords":  [
+                     "crm",
+                     "erp",
+                     "education",
+                     "consultancy"
+                 ],
+    "author":  "Trust Education",
+    "license":  "ISC",
+    "devDependencies":  {
+                            "@eslint/js":  "^9.39.4",
+                            "eslint":  "^10.0.3",
+                            "husky":  "^9.1.7"
+                        }
 }
