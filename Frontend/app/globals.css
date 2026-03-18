@@ -1,6 +1,8 @@
+/* FullCalendar CSS imports disabled - handled by components
 @import '@fullcalendar/common/index.global.css';
 @import '@fullcalendar/daygrid/index.global.css';
 @import '@fullcalendar/timegrid/index.global.css';
+*/
 
 @tailwind base;
 @tailwind components;

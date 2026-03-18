@@ -12,14 +12,28 @@
   },
   "scripts": {
     "postinstall": "npm run install:backend && npm run install:frontend",
-    "install:backend": "cd Backend && npm install",
-    "install:frontend": "cd Frontend && npm install",
+    "install:backend": "cd Backend && npm install --legacy-peer-deps",
+    "install:frontend": "cd Frontend && npm install --legacy-peer-deps",
+    "build": "npm run build:frontend && npm run build:backend",
     "build:frontend": "cd Frontend && npm run build",
+    "build:backend": "cd Backend && npm run build",
+    "start": "npm run start:backend",
     "start:backend": "cd Backend && npm start",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "seed:backend": "cd Backend && npm run seed",
     "dev:backend": "cd Backend && npm run dev",
-    "dev:frontend": "cd Frontend && npm start",
-    "test:system": "cd Backend && node integration_test.js"
+    "dev:frontend": "cd Frontend && npm run dev",
+    "lint": "npm run lint:backend && npm run lint:frontend",
+    "lint:backend": "cd Backend && npm run lint",
+    "lint:frontend": "cd Frontend && npm run lint",
+    "lint:fix": "npm run lint:fix:backend && npm run lint:fix:frontend",
+    "lint:fix:backend": "cd Backend && npm run lint:fix",
+    "lint:fix:frontend": "cd Frontend && npm run lint:fix",
+    "format": "npm run format:backend && npm run format:frontend",
+    "format:backend": "cd Backend && npm run format",
+    "format:frontend": "cd Frontend && npm run format",
+    "test:system": "cd Backend && node integration_test.js",
+    "prepare": "husky install"
   },
   "keywords": [
     "crm",
@@ -31,6 +45,7 @@
   "license": "ISC",
   "devDependencies": {
     "@eslint/js": "^9.39.4",
-    "eslint": "^10.0.3"
+    "eslint": "^10.0.3",
+    "husky": "^9.1.7"
   }
 }

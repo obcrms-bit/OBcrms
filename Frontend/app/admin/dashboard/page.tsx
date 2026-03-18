@@ -14,7 +14,6 @@ import {
   PieChart,
   Pie,
   Cell,
-  Doughnut,
 } from 'recharts';
 import {
   Users,
