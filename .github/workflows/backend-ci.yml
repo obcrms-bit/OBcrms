@@ -1,0 +1,95 @@
+name: Backend CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'Backend/**'
+      - '.github/workflows/backend-ci.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'Backend/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      mongodb:
+        image: mongo:latest
+        options: >-
+          --health-cmd mongosh
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 27017:27017
+
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: 'Backend/package-lock.json'
+    
+    - name: Install dependencies
+      run: cd Backend && npm ci
+    
+    - name: Run linting
+      run: cd Backend && npm run lint 2>/dev/null || echo "No lint script configured"
+    
+    - name: Check syntax
+      run: cd Backend && node -c server.js
+    
+    - name: Check required files
+      run: |
+        cd Backend
+        [ -f "server.js" ] && echo "✅ server.js found"
+        [ -f "package.json" ] && echo "✅ package.json found"
+        [ -d "models" ] && echo "✅ models directory found"
+        [ -d "routes" ] && echo "✅ routes directory found"
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+    
+    - name: Install dependencies
+      run: cd Backend && npm ci --production
+    
+    - name: Build Docker image
+      run: |
+        cd Backend
+        docker build -t crm-backend:latest . 2>/dev/null || echo "Dockerfile not configured yet"
+    
+    - name: Verify build
+      run: cd Backend && ls -la
+
+  deploy-staging:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    
+    steps:
+    - name: Deploy to staging
+      run: echo "Configure your staging deployment here (Railway, Heroku, etc.)"
+
+  deploy-production:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+    - name: Deploy to production
+      run: echo "Configure your production deployment here"

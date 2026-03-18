@@ -1,5 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Users, BookOpen, CheckCircle, Clock, Plus, Search } from 'lucide-react';
+import {
+  Users,
+  BookOpen,
+  CheckCircle,
+  Clock,
+  Plus,
+  Search,
+} from 'lucide-react';
 import DashboardLayout from '../components/Layout/DashboardLayout';
 import StatsCard from '../components/Dashboard/StatsCard';
 import StudentTable from '../components/Dashboard/StudentTable';
@@ -116,7 +123,9 @@ const AdminDashboard = () => {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-            <p className="text-gray-600 mt-2">Manage students and track performance</p>
+            <p className="text-gray-600 mt-2">
+              Manage students and track performance
+            </p>
           </div>
           <button
             onClick={handleAddStudent}
@@ -171,7 +180,10 @@ const AdminDashboard = () => {
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-bold text-gray-900">Students</h2>
                 <div className="relative">
-                  <Search size={18} className="absolute left-3 top-3 text-gray-400" />
+                  <Search
+                    size={18}
+                    className="absolute left-3 top-3 text-gray-400"
+                  />
                   <input
                     type="text"
                     placeholder="Search students..."
@@ -222,7 +234,9 @@ const AdminDashboard = () => {
           <div className="space-y-6">
             {/* Quick Actions */}
             <div className="card p-6">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">Quick Actions</h3>
+              <h3 className="text-lg font-bold text-gray-900 mb-4">
+                Quick Actions
+              </h3>
               <div className="space-y-3">
                 <button
                   onClick={handleAddStudent}
@@ -231,13 +245,17 @@ const AdminDashboard = () => {
                   Add New Student
                 </button>
                 <button className="w-full btn-secondary">View Reports</button>
-                <button className="w-full btn-secondary">Manage Counselors</button>
+                <button className="w-full btn-secondary">
+                  Manage Counselors
+                </button>
               </div>
             </div>
 
             {/* Tasks */}
             <div className="card p-6">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">This Week</h3>
+              <h3 className="text-lg font-bold text-gray-900 mb-4">
+                This Week
+              </h3>
               <div className="space-y-3">
                 <div className="flex items-center space-x-3">
                   <div className="w-2 h-2 bg-primary-500 rounded-full"></div>

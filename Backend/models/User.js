@@ -1,13 +1,13 @@
-const mongoose = require("mongoose");
-const bcrypt = require("bcrypt");
+const mongoose = require('mongoose');
+const bcrypt = require('bcrypt');
 
 const userSchema = new mongoose.Schema(
   {
     // Multi-Tenancy: Every user belongs to exactly one company
     companyId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Company",
-      required: [true, "Company ID is required"],
+      ref: 'Company',
+      required: [true, 'Company ID is required'],
       index: true,
       // CRITICAL: This ensures data isolation
     },
@@ -15,13 +15,13 @@ const userSchema = new mongoose.Schema(
     // Auth
     name: {
       type: String,
-      required: [true, "Name is required"],
+      required: [true, 'Name is required'],
       trim: true,
     },
 
     email: {
       type: String,
-      required: [true, "Email is required"],
+      required: [true, 'Email is required'],
       lowercase: true,
       trim: true,
       // Unique per company (compound index below)
@@ -33,8 +33,8 @@ const userSchema = new mongoose.Schema(
 
     password: {
       type: String,
-      required: [true, "Password is required"],
-      minlength: [8, "Password must be at least 8 characters"],
+      required: [true, 'Password is required'],
+      minlength: [8, 'Password must be at least 8 characters'],
       select: false, // Don't return password in queries by default
     },
 
@@ -42,10 +42,10 @@ const userSchema = new mongoose.Schema(
     role: {
       type: String,
       enum: {
-        values: ["super_admin", "admin", "manager", "counselor", "sales", "accountant"],
-        message: "Invalid role",
+        values: ['super_admin', 'admin', 'manager', 'counselor', 'sales', 'accountant'],
+        message: 'Invalid role',
       },
-      default: "admin",
+      default: 'admin',
       lowercase: true,
       index: true,
       // super_admin: Global access to all companies (NOT company-specific)
@@ -60,20 +60,20 @@ const userSchema = new mongoose.Schema(
         resource: {
           type: String,
           enum: [
-            "students",
-            "leads",
-            "applications",
-            "reports",
-            "users",
-            "settings",
-            "billing",
-            "audit_logs",
+            'students',
+            'leads',
+            'applications',
+            'reports',
+            'users',
+            'settings',
+            'billing',
+            'audit_logs',
           ],
         },
         actions: [
           {
             type: String,
-            enum: ["view", "create", "edit", "delete", "export"],
+            enum: ['view', 'create', 'edit', 'delete', 'export'],
           },
         ],
       },
@@ -88,8 +88,8 @@ const userSchema = new mongoose.Schema(
     // Preferences
     preferredLanguage: {
       type: String,
-      default: "en",
-      enum: ["en", "es", "fr", "de", "hi"],
+      default: 'en',
+      enum: ['en', 'es', 'fr', 'de', 'hi'],
     },
     timezone: String,
 
@@ -104,7 +104,6 @@ const userSchema = new mongoose.Schema(
     isActive: {
       type: Boolean,
       default: true,
-      index: true,
     },
 
     lastLogin: Date,
@@ -138,7 +137,7 @@ const userSchema = new mongoose.Schema(
     // For managers/counselors: Who supervises them
     supervisor: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: 'User',
     },
 
     // Metadata & Timestamps
@@ -158,7 +157,7 @@ const userSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-    collection: "users",
+    collection: 'users',
   }
 );
 
@@ -168,8 +167,8 @@ userSchema.index({ companyId: 1, role: 1 });
 userSchema.index({ companyId: 1, isActive: 1 });
 
 // Middleware: Hash password before saving
-userSchema.pre("save", async function () {
-  if (!this.isModified("password")) return;
+userSchema.pre('save', async function () {
+  if (!this.isModified('password')) return;
 
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
@@ -195,7 +194,7 @@ userSchema.methods.toJWTPayload = function () {
 
 // Method: Check if user has permission
 userSchema.methods.hasPermission = function (resource, action) {
-  if (this.role === "super_admin") return true; // Super admin has all permissions
+  if (this.role === 'super_admin') return true; // Super admin has all permissions
 
   const permission = this.permissions.find((p) => p.resource === resource);
   if (!permission) return false;
@@ -230,4 +229,4 @@ userSchema.methods.resetLoginAttempts = async function () {
   return this.save();
 };
 
-module.exports = mongoose.model("User", userSchema);
+module.exports = mongoose.model('User', userSchema);

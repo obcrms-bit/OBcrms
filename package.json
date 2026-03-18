@@ -2,6 +2,14 @@
   "name": "trust-education-crm-erp",
   "version": "1.0.1",
   "description": "Enterprise CRM/ERP for Education Consultancy",
+  "dependencies": {
+    "express": "^4.18.2",
+    "mongoose": "^7.5.0",
+    "cors": "^2.8.5",
+    "morgan": "^1.10.0",
+    "helmet": "^7.0.0",
+    "compression": "^1.7.4"
+  },
   "scripts": {
     "postinstall": "npm run install:backend && npm run install:frontend",
     "install:backend": "cd Backend && npm install",

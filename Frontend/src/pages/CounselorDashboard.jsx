@@ -15,7 +15,9 @@ const CounselorDashboard = () => {
       <div className="space-y-8">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">My Dashboard</h1>
-          <p className="text-gray-600 mt-2">Manage your assigned students and track progress</p>
+          <p className="text-gray-600 mt-2">
+            Manage your assigned students and track progress
+          </p>
         </div>
 
         {/* Quick Stats */}
@@ -50,7 +52,10 @@ const CounselorDashboard = () => {
             <div className="card p-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-bold text-gray-900">My Students</h2>
-                <a href="#" className="text-primary-500 hover:text-primary-600 text-sm font-medium">
+                <a
+                  href="#"
+                  className="text-primary-500 hover:text-primary-600 text-sm font-medium"
+                >
                   View All →
                 </a>
               </div>
@@ -64,33 +69,50 @@ const CounselorDashboard = () => {
           <div className="space-y-6">
             {/* Status Breakdown */}
             <div className="card p-6">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">Status Breakdown</h3>
+              <h3 className="text-lg font-bold text-gray-900 mb-4">
+                Status Breakdown
+              </h3>
               <div className="space-y-4">
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-gray-700">New</span>
+                    <span className="text-sm font-medium text-gray-700">
+                      New
+                    </span>
                     <span className="text-sm font-bold text-gray-900">4</span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div className="bg-primary-500 h-2 rounded-full" style={{ width: '33%' }}></div>
+                    <div
+                      className="bg-primary-500 h-2 rounded-full"
+                      style={{ width: '33%' }}
+                    ></div>
                   </div>
                 </div>
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-gray-700">Processing</span>
+                    <span className="text-sm font-medium text-gray-700">
+                      Processing
+                    </span>
                     <span className="text-sm font-bold text-gray-900">5</span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div className="bg-warning-500 h-2 rounded-full" style={{ width: '42%' }}></div>
+                    <div
+                      className="bg-warning-500 h-2 rounded-full"
+                      style={{ width: '42%' }}
+                    ></div>
                   </div>
                 </div>
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-gray-700">Approved</span>
+                    <span className="text-sm font-medium text-gray-700">
+                      Approved
+                    </span>
                     <span className="text-sm font-bold text-gray-900">3</span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div className="bg-success-500 h-2 rounded-full" style={{ width: '25%' }}></div>
+                    <div
+                      className="bg-success-500 h-2 rounded-full"
+                      style={{ width: '25%' }}
+                    ></div>
                   </div>
                 </div>
               </div>
@@ -98,18 +120,31 @@ const CounselorDashboard = () => {
 
             {/* Upcoming Tasks */}
             <div className="card p-6">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">Next Steps</h3>
+              <h3 className="text-lg font-bold text-gray-900 mb-4">
+                Next Steps
+              </h3>
               <div className="space-y-3">
                 <div className="flex items-start space-x-3">
-                  <input type="checkbox" className="mt-1 w-4 h-4 text-primary-500" />
+                  <input
+                    type="checkbox"
+                    className="mt-1 w-4 h-4 text-primary-500"
+                  />
                   <p className="text-sm text-gray-700">Review 3 applications</p>
                 </div>
                 <div className="flex items-start space-x-3">
-                  <input type="checkbox" className="mt-1 w-4 h-4 text-primary-500" />
-                  <p className="text-sm text-gray-700">Follow up on documents</p>
+                  <input
+                    type="checkbox"
+                    className="mt-1 w-4 h-4 text-primary-500"
+                  />
+                  <p className="text-sm text-gray-700">
+                    Follow up on documents
+                  </p>
                 </div>
                 <div className="flex items-start space-x-3">
-                  <input type="checkbox" className="mt-1 w-4 h-4 text-primary-500" />
+                  <input
+                    type="checkbox"
+                    className="mt-1 w-4 h-4 text-primary-500"
+                  />
                   <p className="text-sm text-gray-700">Schedule meetings</p>
                 </div>
               </div>

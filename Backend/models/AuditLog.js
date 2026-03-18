@@ -1,11 +1,11 @@
-const mongoose = require("mongoose");
+const mongoose = require('mongoose');
 
 const auditLogSchema = new mongoose.Schema(
   {
     // Multi-Tenancy
     companyId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Company",
+      ref: 'Company',
       required: true,
       index: true,
     },
@@ -13,7 +13,7 @@ const auditLogSchema = new mongoose.Schema(
     // User Info
     userId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: 'User',
       required: true,
     },
 
@@ -26,14 +26,14 @@ const auditLogSchema = new mongoose.Schema(
     // Action Details
     action: {
       type: String,
-      enum: ["create", "update", "delete", "export", "login", "logout"],
+      enum: ['create', 'update', 'delete', 'export', 'login', 'logout'],
       required: true,
       index: true,
     },
 
     resource: {
       type: String,
-      enum: ["student", "user", "lead", "application", "report", "company", "settings", "invoice"],
+      enum: ['student', 'user', 'lead', 'application', 'report', 'company', 'settings', 'invoice'],
       required: true,
       index: true,
     },
@@ -55,8 +55,8 @@ const auditLogSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["success", "failure"],
-      default: "success",
+      enum: ['success', 'failure'],
+      default: 'success',
     },
 
     errorMessage: String, // If status is failure
@@ -70,7 +70,7 @@ const auditLogSchema = new mongoose.Schema(
     },
   },
   {
-    collection: "audit_logs",
+    collection: 'audit_logs',
   }
 );
 
@@ -98,7 +98,7 @@ auditLogSchema.statics.logAction = async function (
     changes,
     ipAddress,
     userAgent,
-    status = "success",
+    status = 'success',
     errorMessage,
   },
   metadata = {}
@@ -124,7 +124,7 @@ auditLogSchema.statics.logAction = async function (
 
     return await auditLog.save();
   } catch (error) {
-    console.error("Error logging audit trail:", error);
+    console.error('Error logging audit trail:', error);
     // Don't throw - audit logs should never break the application
   }
 };
@@ -137,4 +137,4 @@ auditLogSchema.methods.toJSON = function () {
   return log;
 };
 
-module.exports = mongoose.model("AuditLog", auditLogSchema);
+module.exports = mongoose.model('AuditLog', auditLogSchema);

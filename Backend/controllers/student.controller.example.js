@@ -1,6 +1,6 @@
 /**
  * Student Controller - Multi-Tenant Version
- * 
+ *
  * Key Points:
  * 1. All queries get automatic company filtering
  * 2. Data ownership verified before modifications
@@ -8,36 +8,36 @@
  * 4. Role-based logic for counselor restrictions
  */
 
-const Student = require("../models/student.model");
-const AuditLog = require("../models/AuditLog");
+const Student = require('../models/student.model');
+const AuditLog = require('../models/AuditLog');
 const {
   getTenantFilter,
   verifyOwnership,
   getPaginatedResults,
   applyRoleBasedFilter,
   createAuditLog,
-} = require("../utils/tenantContext");
+} = require('../utils/tenantContext');
 
 // ============================================
 // GET: List all students for company
 // ============================================
 exports.getStudents = async (req, res) => {
   try {
-    const { page = 1, limit = 10, search = "", status = "" } = req.query;
+    const { page = 1, limit = 10, search = '', status = '' } = req.query;
 
     // Build filter with company isolation
-    let filters = getTenantFilter(req);
+    const filters = getTenantFilter(req);
 
     // Add role-based filtering (counselors see only assigned)
-    if (req.user.role === "counselor") {
+    if (req.user.role === 'counselor') {
       filters.assignedCounselor = req.userId;
     }
 
     // Add search filter
     if (search) {
       filters.$or = [
-        { fullName: { $regex: search, $options: "i" } },
-        { email: { $regex: search, $options: "i" } },
+        { fullName: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
       ];
     }
 
@@ -57,7 +57,7 @@ exports.getStudents = async (req, res) => {
 
     res.json({
       success: true,
-      message: "Students retrieved",
+      message: 'Students retrieved',
       data: results.data,
       pagination: {
         total: results.total,
@@ -70,7 +70,7 @@ exports.getStudents = async (req, res) => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: "Failed to retrieve students",
+      message: 'Failed to retrieve students',
       error: error.message,
     });
   }
@@ -87,37 +87,37 @@ exports.getStudentById = async (req, res) => {
     const student = await verifyOwnership(req, Student, id);
 
     // For counselors: ensure they're assigned or admin
-    if (req.user.role === "counselor") {
+    if (req.user.role === 'counselor') {
       if (student.assignedCounselor.toString() !== req.userId.toString()) {
         return res.status(403).json({
           success: false,
-          message: "Unauthorized",
-          error: "You can only view students assigned to you",
+          message: 'Unauthorized',
+          error: 'You can only view students assigned to you',
         });
       }
     }
 
     // Populate counselor info if assigned
     if (student.assignedCounselor) {
-      await student.populate("assignedCounselor", "name email phone");
+      await student.populate('assignedCounselor', 'name email phone');
     }
 
     res.json({
       success: true,
-      message: "Student retrieved",
+      message: 'Student retrieved',
       data: student,
     });
   } catch (error) {
-    if (error.message.includes("not found")) {
+    if (error.message.includes('not found')) {
       return res.status(404).json({
         success: false,
-        message: "Student not found",
+        message: 'Student not found',
       });
     }
 
     res.status(500).json({
       success: false,
-      message: "Failed to retrieve student",
+      message: 'Failed to retrieve student',
       error: error.message,
     });
   }
@@ -134,8 +134,8 @@ exports.createStudent = async (req, res) => {
     if (!fullName || !email) {
       return res.status(400).json({
         success: false,
-        message: "Validation error",
-        error: "fullName and email are required",
+        message: 'Validation error',
+        error: 'fullName and email are required',
       });
     }
 
@@ -147,7 +147,7 @@ exports.createStudent = async (req, res) => {
       phone,
       course: course || "Bachelor's",
       countryInterested,
-      status: "New",
+      status: 'New',
     };
 
     // Create student
@@ -161,8 +161,8 @@ exports.createStudent = async (req, res) => {
       userName: req.user.name,
       userEmail: req.user.email,
       userRole: req.user.role,
-      action: "create",
-      resource: "student",
+      action: 'create',
+      resource: 'student',
       resourceId: student._id,
       resourceName: fullName,
       changes: {
@@ -170,12 +170,12 @@ exports.createStudent = async (req, res) => {
         after: studentData,
       },
       ipAddress: req.ip,
-      userAgent: req.get("user-agent"),
+      userAgent: req.get('user-agent'),
     });
 
     res.status(201).json({
       success: true,
-      message: "Student created successfully",
+      message: 'Student created successfully',
       data: student,
     });
   } catch (error) {
@@ -183,14 +183,14 @@ exports.createStudent = async (req, res) => {
     if (error.code === 11000) {
       return res.status(409).json({
         success: false,
-        message: "Conflict",
-        error: "Email already exists for this company",
+        message: 'Conflict',
+        error: 'Email already exists for this company',
       });
     }
 
     res.status(400).json({
       success: false,
-      message: "Failed to create student",
+      message: 'Failed to create student',
       error: error.message,
     });
   }
@@ -207,12 +207,12 @@ exports.updateStudent = async (req, res) => {
     const student = await verifyOwnership(req, Student, id);
 
     // Step 2: For counselors, they can only update assigned students
-    if (req.user.role === "counselor") {
+    if (req.user.role === 'counselor') {
       if (student.assignedCounselor.toString() !== req.userId.toString()) {
         return res.status(403).json({
           success: false,
-          message: "Unauthorized",
-          error: "You can only update students assigned to you",
+          message: 'Unauthorized',
+          error: 'You can only update students assigned to you',
         });
       }
     }
@@ -234,8 +234,8 @@ exports.updateStudent = async (req, res) => {
       userName: req.user.name,
       userEmail: req.user.email,
       userRole: req.user.role,
-      action: "update",
-      resource: "student",
+      action: 'update',
+      resource: 'student',
       resourceId: id,
       resourceName: updatedStudent.fullName,
       changes: {
@@ -243,25 +243,25 @@ exports.updateStudent = async (req, res) => {
         after: updatedStudent.toObject(),
       },
       ipAddress: req.ip,
-      userAgent: req.get("user-agent"),
+      userAgent: req.get('user-agent'),
     });
 
     res.json({
       success: true,
-      message: "Student updated successfully",
+      message: 'Student updated successfully',
       data: updatedStudent,
     });
   } catch (error) {
-    if (error.message.includes("not found")) {
+    if (error.message.includes('not found')) {
       return res.status(404).json({
         success: false,
-        message: "Student not found",
+        message: 'Student not found',
       });
     }
 
     res.status(400).json({
       success: false,
-      message: "Failed to update student",
+      message: 'Failed to update student',
       error: error.message,
     });
   }
@@ -297,8 +297,8 @@ exports.deleteStudent = async (req, res) => {
       userName: req.user.name,
       userEmail: req.user.email,
       userRole: req.user.role,
-      action: "delete",
-      resource: "student",
+      action: 'delete',
+      resource: 'student',
       resourceId: id,
       resourceName: studentInfo.fullName,
       changes: {
@@ -306,24 +306,24 @@ exports.deleteStudent = async (req, res) => {
         after: null,
       },
       ipAddress: req.ip,
-      userAgent: req.get("user-agent"),
+      userAgent: req.get('user-agent'),
     });
 
     res.json({
       success: true,
-      message: "Student deleted successfully",
+      message: 'Student deleted successfully',
     });
   } catch (error) {
-    if (error.message.includes("not found")) {
+    if (error.message.includes('not found')) {
       return res.status(404).json({
         success: false,
-        message: "Student not found",
+        message: 'Student not found',
       });
     }
 
     res.status(500).json({
       success: false,
-      message: "Failed to delete student",
+      message: 'Failed to delete student',
       error: error.message,
     });
   }
@@ -340,8 +340,8 @@ exports.assignCounselor = async (req, res) => {
     if (!counselorId) {
       return res.status(400).json({
         success: false,
-        message: "Validation error",
-        error: "counselorId is required",
+        message: 'Validation error',
+        error: 'counselorId is required',
       });
     }
 
@@ -349,7 +349,7 @@ exports.assignCounselor = async (req, res) => {
     const student = await verifyOwnership(req, Student, studentId);
 
     // Verify counselor belongs to same company
-    const User = require("../models/user.model");
+    const User = require('../models/user.model');
     const counselor = await User.findOne({
       _id: counselorId,
       companyId: req.companyId, // ⭐ ENSURE SAME COMPANY
@@ -358,8 +358,8 @@ exports.assignCounselor = async (req, res) => {
     if (!counselor) {
       return res.status(404).json({
         success: false,
-        message: "Counselor not found",
-        error: "Counselor must belong to your company",
+        message: 'Counselor not found',
+        error: 'Counselor must belong to your company',
       });
     }
 
@@ -378,8 +378,8 @@ exports.assignCounselor = async (req, res) => {
       userName: req.user.name,
       userEmail: req.user.email,
       userRole: req.user.role,
-      action: "update",
-      resource: "student",
+      action: 'update',
+      resource: 'student',
       resourceId: studentId,
       resourceName: student.fullName,
       changes: {
@@ -387,18 +387,18 @@ exports.assignCounselor = async (req, res) => {
         after: { assignedCounselor: counselorId },
       },
       ipAddress: req.ip,
-      userAgent: req.get("user-agent"),
+      userAgent: req.get('user-agent'),
     });
 
     res.json({
       success: true,
-      message: "Counselor assigned successfully",
+      message: 'Counselor assigned successfully',
       data: student,
     });
   } catch (error) {
     res.status(400).json({
       success: false,
-      message: "Failed to assign counselor",
+      message: 'Failed to assign counselor',
       error: error.message,
     });
   }
@@ -410,13 +410,13 @@ exports.assignCounselor = async (req, res) => {
 exports.addStudentNote = async (req, res) => {
   try {
     const { studentId } = req.params;
-    const { message, type = "note" } = req.body;
+    const { message, type = 'note' } = req.body;
 
     if (!message) {
       return res.status(400).json({
         success: false,
-        message: "Validation error",
-        error: "message is required",
+        message: 'Validation error',
+        error: 'message is required',
       });
     }
 
@@ -433,8 +433,8 @@ exports.addStudentNote = async (req, res) => {
       userName: req.user.name,
       userEmail: req.user.email,
       userRole: req.user.role,
-      action: "update",
-      resource: "student",
+      action: 'update',
+      resource: 'student',
       resourceId: studentId,
       resourceName: student.fullName,
       changes: {
@@ -442,18 +442,18 @@ exports.addStudentNote = async (req, res) => {
         after: { communicationType: type, message },
       },
       ipAddress: req.ip,
-      userAgent: req.get("user-agent"),
+      userAgent: req.get('user-agent'),
     });
 
     res.json({
       success: true,
-      message: "Note added successfully",
+      message: 'Note added successfully',
       data: student,
     });
   } catch (error) {
     res.status(400).json({
       success: false,
-      message: "Failed to add note",
+      message: 'Failed to add note',
       error: error.message,
     });
   }
@@ -465,18 +465,18 @@ exports.addStudentNote = async (req, res) => {
 exports.getMyStudents = async (req, res) => {
   try {
     // For counselors: only their assigned students
-    if (req.user.role === "counselor") {
+    if (req.user.role === 'counselor') {
       const filter = getTenantFilter(req);
       filter.assignedCounselor = req.userId;
 
       const students = await Student.find(filter)
         .sort({ createdAt: -1 })
-        .select("-communicationHistory.createdBy")
+        .select('-communicationHistory.createdBy')
         .lean();
 
       return res.json({
         success: true,
-        message: "Your assigned students",
+        message: 'Your assigned students',
         data: students,
       });
     }
@@ -484,13 +484,13 @@ exports.getMyStudents = async (req, res) => {
     // Should not reach here if authorization middleware is correct
     res.status(403).json({
       success: false,
-      message: "Unauthorized",
-      error: "This endpoint is for counselors only",
+      message: 'Unauthorized',
+      error: 'This endpoint is for counselors only',
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: "Failed to retrieve students",
+      message: 'Failed to retrieve students',
       error: error.message,
     });
   }
@@ -505,20 +505,17 @@ exports.getStudentStats = async (req, res) => {
 
     const [total, byStatus, recentlyAdded] = await Promise.all([
       Student.countDocuments(filter),
-      Student.aggregate([
-        { $match: filter },
-        { $group: { _id: "$status", count: { $sum: 1 } } },
-      ]),
+      Student.aggregate([{ $match: filter }, { $group: { _id: '$status', count: { $sum: 1 } } }]),
       Student.find(filter)
         .sort({ createdAt: -1 })
         .limit(5)
-        .select("fullName email status createdAt")
+        .select('fullName email status createdAt')
         .lean(),
     ]);
 
     res.json({
       success: true,
-      message: "Student statistics",
+      message: 'Student statistics',
       data: {
         totalStudents: total,
         byStatus: byStatus.reduce((acc, item) => {
@@ -531,7 +528,7 @@ exports.getStudentStats = async (req, res) => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: "Failed to retrieve statistics",
+      message: 'Failed to retrieve statistics',
       error: error.message,
     });
   }

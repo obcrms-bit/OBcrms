@@ -1,18 +1,18 @@
 /**
  * Tenant Context Utilities
- * 
+ *
  * Helper functions for multi-tenant query building and data access
  */
 
 /**
  * Build base query with tenant isolation
- * 
+ *
  * Usage:
  * const students = await Student.find(buildTenantQuery(req));
  */
 const buildTenantQuery = (req, additionalFilters = {}) => {
   if (!req.companyId) {
-    throw new Error("Tenant context missing. Ensure extractTenant middleware is applied.");
+    throw new Error('Tenant context missing. Ensure extractTenant middleware is applied.');
   }
 
   return {
@@ -24,15 +24,11 @@ const buildTenantQuery = (req, additionalFilters = {}) => {
 /**
  * Safe query builder with automatic tenant filtering
  * Prevents accidental cross-tenant data access
- * 
+ *
  * Usage:
  * const query = buildSafeQuery(req, { status: "Active" }, { sort: "email" });
  */
-const buildSafeQuery = (
-  req,
-  filters = {},
-  options = {}
-) => {
+const buildSafeQuery = (req, filters = {}, options = {}) => {
   const baseQuery = buildTenantQuery(req, filters);
 
   return {
@@ -50,7 +46,7 @@ const buildSafeQuery = (
 
 /**
  * Execute safe query with full isolation
- * 
+ *
  * Usage:
  * const students = await executeSafeQuery(
  *   req,
@@ -59,12 +55,7 @@ const buildSafeQuery = (
  *   { sort: "-createdAt", limit: 10 }
  * );
  */
-const executeSafeQuery = async (
-  req,
-  Model,
-  filters = {},
-  options = {}
-) => {
+const executeSafeQuery = async (req, Model, filters = {}, options = {}) => {
   try {
     const { query, options: queryOptions } = buildSafeQuery(req, filters, options);
 
@@ -96,7 +87,7 @@ const executeSafeQuery = async (
 
 /**
  * Count documents with tenant isolation
- * 
+ *
  * Usage:
  * const count = await countWithTenant(req, Student, { status: "Active" });
  */
@@ -107,26 +98,16 @@ const countWithTenant = async (req, Model, filters = {}) => {
 
 /**
  * Get paginated results with tenant isolation
- * 
+ *
  * Returns: { data: [], total: 100, page: 1, pages: 10, limit: 10 }
  */
-const getPaginatedResults = async (
-  req,
-  Model,
-  filters = {},
-  page = 1,
-  limit = 10
-) => {
+const getPaginatedResults = async (req, Model, filters = {}, page = 1, limit = 10) => {
   try {
     const skip = (page - 1) * limit;
     const query = buildTenantQuery(req, filters);
 
     const [data, total] = await Promise.all([
-      Model.find(query)
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .lean(),
+      Model.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
       Model.countDocuments(query),
     ]);
 
@@ -146,16 +127,11 @@ const getPaginatedResults = async (
 /**
  * Search with tenant isolation
  * Requires model to have text indexes
- * 
+ *
  * Usage:
  * const results = await searchWithTenant(req, Student, "john", { limit: 10 });
  */
-const searchWithTenant = async (
-  req,
-  Model,
-  searchText,
-  options = {}
-) => {
+const searchWithTenant = async (req, Model, searchText, options = {}) => {
   try {
     const query = {
       ...buildTenantQuery(req),
@@ -163,8 +139,8 @@ const searchWithTenant = async (
     };
 
     const results = await Model.find(query)
-      .select({ score: { $meta: "textScore" } })
-      .sort({ score: { $meta: "textScore" } })
+      .select({ score: { $meta: 'textScore' } })
+      .sort({ score: { $meta: 'textScore' } })
       .limit(options.limit || 20)
       .lean();
 
@@ -178,11 +154,7 @@ const searchWithTenant = async (
  * Bulk operations with tenant safety
  * Automatically adds companyId to all operations
  */
-const bulkWriteWithTenant = async (
-  req,
-  Model,
-  operations = []
-) => {
+const bulkWriteWithTenant = async (req, Model, operations = []) => {
   // Enhance operations with tenantId safety checks
   const enhancedOps = operations.map((op) => {
     if (op.updateOne) {
@@ -203,14 +175,14 @@ const bulkWriteWithTenant = async (
 /**
  * Verify resource ownership before modification
  * Used in update/delete operations
- * 
+ *
  * Usage:
  * await verifyOwnership(req, Student, studentId);
  * // If passes, it's safe to update
  */
 const verifyOwnership = async (req, Model, resourceId) => {
   if (!resourceId) {
-    throw new Error("Resource ID required");
+    throw new Error('Resource ID required');
   }
 
   const resource = await Model.findOne({
@@ -219,9 +191,7 @@ const verifyOwnership = async (req, Model, resourceId) => {
   });
 
   if (!resource) {
-    throw new Error(
-      "Resource not found or belongs to different company"
-    );
+    throw new Error('Resource not found or belongs to different company');
   }
 
   return resource;
@@ -229,7 +199,7 @@ const verifyOwnership = async (req, Model, resourceId) => {
 
 /**
  * Apply counselor filter for role-based access
- * 
+ *
  * Usage:
  * const filter = applyRoleBasedFilter(req, {});
  * const students = await Student.find(filter);
@@ -238,7 +208,7 @@ const applyRoleBasedFilter = (req, baseFilter = {}) => {
   const filter = buildTenantQuery(req, baseFilter);
 
   // If counselor, only return their assigned students
-  if (req.user.role === "counselor") {
+  if (req.user.role === 'counselor') {
     filter.assignedCounselor = req.userId;
   }
 
@@ -260,7 +230,7 @@ const createAuditLog = (req, action, resource, resourceId = null, details = {}) 
     resource,
     resourceId,
     ipAddress: req.ip,
-    userAgent: req.get("user-agent"),
+    userAgent: req.get('user-agent'),
     timestamp: new Date(),
     ...details,
   };

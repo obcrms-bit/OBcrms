@@ -1,0 +1,39 @@
+# EditorConfig helps maintain consistent coding styles
+# for multiple developers working on the same project
+
+root = true
+
+# All files
+[*]
+charset = utf-8
+indent_style = space
+indent_size = 2
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Markdown files - preserve whitespace
+[*.{md,mdx}]
+trim_trailing_whitespace = false
+
+# JSON files - no tabs
+[*.json]
+indent_style = space
+indent_size = 2
+
+# YAML files
+[*.{yml,yaml}]
+indent_size = 2
+
+# Bash/Shell scripts
+[*.sh]
+indent_size = 2
+end_of_line = lf
+
+# Docker files
+[Dockerfile*]
+indent_size = 2
+
+# Makefile - requires tabs
+[Makefile]
+indent_style = tab

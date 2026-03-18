@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+.next/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Build & Distribution
+dist/
+build/
+out/
+.next/
+coverage/
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# Temporary
+.tmp/
+temp/
+
+# Test coverage
+.nyc_output/
+coverage/
+
+# Next.js
+.next/
+out/

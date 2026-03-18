@@ -1,16 +1,16 @@
-const mongoose = require("mongoose");
+const mongoose = require('mongoose');
 
 const applicantSchema = new mongoose.Schema(
   {
     companyId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Company",
+      ref: 'Company',
       required: true,
       index: true,
     },
     studentId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Student",
+      ref: 'Student',
       required: true,
       index: true,
     },
@@ -33,17 +33,28 @@ const applicantSchema = new mongoose.Schema(
     },
     applicationFee: {
       amount: Number,
-      currency: { type: String, default: "USD" },
-      status: { type: String, enum: ["pending", "paid"], default: "pending" },
+      currency: { type: String, default: 'USD' },
+      status: { type: String, enum: ['pending', 'paid'], default: 'pending' },
     },
     tuitionFee: {
       amount: Number,
-      currency: { type: String, default: "USD" },
+      currency: { type: String, default: 'USD' },
     },
     status: {
       type: String,
-      enum: ["draft", "submitted", "offer-received", "conditioned", "unconditioned", "cas-issued", "visa-applied", "visa-granted", "visa-rejected", "enrolled"],
-      default: "draft",
+      enum: [
+        'draft',
+        'submitted',
+        'offer-received',
+        'conditioned',
+        'unconditioned',
+        'cas-issued',
+        'visa-applied',
+        'visa-granted',
+        'visa-rejected',
+        'enrolled',
+      ],
+      default: 'draft',
       index: true,
     },
     offerLetterUrl: String,
@@ -51,12 +62,12 @@ const applicantSchema = new mongoose.Schema(
     visaUrl: String,
     assignedOfficer: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: 'User',
     },
     notes: [
       {
         content: String,
-        createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
         createdAt: { type: Date, default: Date.now },
       },
     ],
@@ -67,5 +78,4 @@ const applicantSchema = new mongoose.Schema(
   }
 );
 
-module.exports = mongoose.model("Applicant", applicantSchema);
-
+module.exports = mongoose.model('Applicant', applicantSchema);

@@ -183,7 +183,6 @@ const companySchema = new mongoose.Schema(
     isActive: {
       type: Boolean,
       default: true,
-      index: true,
     },
     isPaused: {
       type: Boolean,
@@ -277,11 +276,7 @@ companySchema.methods.checkLimit = function (limitType) {
 
 // Method: Is company in active state
 companySchema.methods.isInGoodStanding = function () {
-  return (
-    this.isActive &&
-    !this.isPaused &&
-    this.subscription.status !== 'suspended'
-  );
+  return this.isActive && !this.isPaused && this.subscription.status !== 'suspended';
 };
 
 module.exports = mongoose.model('Company', companySchema);

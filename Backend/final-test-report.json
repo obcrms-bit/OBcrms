@@ -25,7 +25,5 @@
     "Company B can access Company A's leads via direct ID fetch",
     "Lead listing returns records for all companies"
   ],
-  "archWeaknesses": [
-    "Missing companyId on Lead / Missing role checks in Lead fetching"
-  ]
+  "archWeaknesses": ["Missing companyId on Lead / Missing role checks in Lead fetching"]
 }

@@ -1,13 +1,7 @@
 import React from 'react';
 import { Trash2, Edit2, Eye } from 'lucide-react';
 
-const StudentTable = ({
-  students,
-  loading,
-  onEdit,
-  onDelete,
-  onView,
-}) => {
+const StudentTable = ({ students, loading, onEdit, onDelete, onView }) => {
   if (loading) {
     return (
       <div className="text-center py-8">
@@ -25,7 +19,9 @@ const StudentTable = ({
         <div className="inline-block bg-gray-100 p-6 rounded-full mb-4">
           <Eye size={32} className="text-gray-600" />
         </div>
-        <h3 className="text-lg font-semibold text-gray-900 mb-2">No Students Found</h3>
+        <h3 className="text-lg font-semibold text-gray-900 mb-2">
+          No Students Found
+        </h3>
         <p className="text-gray-600">Start by adding your first student</p>
       </div>
     );
@@ -53,12 +49,24 @@ const StudentTable = ({
       <table className="w-full">
         <thead>
           <tr className="border-b border-gray-200 bg-gray-50">
-            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700">Name</th>
-            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700">Email</th>
-            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700">Course</th>
-            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700">Status</th>
-            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700">Phone</th>
-            <th className="px-6 py-3 text-center text-xs font-semibold text-gray-700">Actions</th>
+            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700">
+              Name
+            </th>
+            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700">
+              Email
+            </th>
+            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700">
+              Course
+            </th>
+            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700">
+              Status
+            </th>
+            <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700">
+              Phone
+            </th>
+            <th className="px-6 py-3 text-center text-xs font-semibold text-gray-700">
+              Actions
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -69,7 +77,9 @@ const StudentTable = ({
             >
               <td className="px-6 py-4">
                 <div>
-                  <p className="text-sm font-medium text-gray-900">{student.name}</p>
+                  <p className="text-sm font-medium text-gray-900">
+                    {student.name}
+                  </p>
                 </div>
               </td>
               <td className="px-6 py-4">
@@ -79,7 +89,9 @@ const StudentTable = ({
                 <p className="text-sm text-gray-600">{student.course || '-'}</p>
               </td>
               <td className="px-6 py-4">
-                <span className={`badge ${getStatusBadgeColor(student.status)}`}>
+                <span
+                  className={`badge ${getStatusBadgeColor(student.status)}`}
+                >
                   {student.status || 'New'}
                 </span>
               </td>

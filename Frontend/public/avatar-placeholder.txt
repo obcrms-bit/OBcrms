@@ -1,0 +1,8 @@
+# Placeholder Avatar
+
+Place a user avatar image here named `avatar.png`
+
+Recommended size: 32x32px or 64x64px
+Format: PNG with transparent background
+
+This will be displayed in the header profile dropdown.

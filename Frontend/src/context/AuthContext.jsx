@@ -20,10 +20,22 @@ export const AuthProvider = ({ children }) => {
     setLoading(false);
   }, []);
 
-  const registerCompany = async (companyName, email, password, name, country) => {
+  const registerCompany = async (
+    companyName,
+    email,
+    password,
+    name,
+    country
+  ) => {
     try {
       setError(null);
-      const response = await authAPI.registerCompany(companyName, email, password, name, country);
+      const response = await authAPI.registerCompany(
+        companyName,
+        email,
+        password,
+        name,
+        country
+      );
       if (response.data.success) {
         const { token: newToken, user: userData } = response.data.data || {};
         if (newToken && userData) {
@@ -37,7 +49,10 @@ export const AuthProvider = ({ children }) => {
         throw new Error(response.data.message);
       }
     } catch (err) {
-      const message = err.response?.data?.message || err.message || 'Company registration failed';
+      const message =
+        err.response?.data?.message ||
+        err.message ||
+        'Company registration failed';
       setError(message);
       throw err;
     }
@@ -53,7 +68,8 @@ export const AuthProvider = ({ children }) => {
         throw new Error(response.data.message);
       }
     } catch (err) {
-      const message = err.response?.data?.message || err.message || 'Registration failed';
+      const message =
+        err.response?.data?.message || err.message || 'Registration failed';
       setError(message);
       throw err;
     }
@@ -77,7 +93,8 @@ export const AuthProvider = ({ children }) => {
         throw new Error(response.data?.message || 'Login failed');
       }
     } catch (err) {
-      const message = err.response?.data?.message || err.message || 'Login failed';
+      const message =
+        err.response?.data?.message || err.message || 'Login failed';
       setError(message);
       throw err;
     }
@@ -91,7 +108,18 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, error, registerCompany, register, login, logout }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        token,
+        loading,
+        error,
+        registerCompany,
+        register,
+        login,
+        logout,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

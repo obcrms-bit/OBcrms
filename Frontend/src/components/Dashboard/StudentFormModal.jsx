@@ -1,7 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 
-const StudentFormModal = ({ isOpen, onClose, onSubmit, student = null, loading = false }) => {
+const StudentFormModal = ({
+  isOpen,
+  onClose,
+  onSubmit,
+  student = null,
+  loading = false,
+}) => {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -46,7 +52,10 @@ const StudentFormModal = ({ isOpen, onClose, onSubmit, student = null, loading =
       newErrors.email = 'Please enter a valid email';
     }
 
-    if (formData.phone && !/^\d{10,}$/.test(formData.phone.replace(/\D/g, ''))) {
+    if (
+      formData.phone &&
+      !/^\d{10,}$/.test(formData.phone.replace(/\D/g, ''))
+    ) {
       newErrors.phone = 'Please enter a valid phone number';
     }
 
@@ -108,7 +117,9 @@ const StudentFormModal = ({ isOpen, onClose, onSubmit, student = null, loading =
               disabled={loading}
               className="input-field w-full"
             />
-            {errors.name && <p className="text-danger-500 text-sm mt-1">{errors.name}</p>}
+            {errors.name && (
+              <p className="text-danger-500 text-sm mt-1">{errors.name}</p>
+            )}
           </div>
 
           {/* Email */}
@@ -123,7 +134,9 @@ const StudentFormModal = ({ isOpen, onClose, onSubmit, student = null, loading =
               disabled={loading}
               className="input-field w-full"
             />
-            {errors.email && <p className="text-danger-500 text-sm mt-1">{errors.email}</p>}
+            {errors.email && (
+              <p className="text-danger-500 text-sm mt-1">{errors.email}</p>
+            )}
           </div>
 
           {/* Phone */}
@@ -138,7 +151,9 @@ const StudentFormModal = ({ isOpen, onClose, onSubmit, student = null, loading =
               disabled={loading}
               className="input-field w-full"
             />
-            {errors.phone && <p className="text-danger-500 text-sm mt-1">{errors.phone}</p>}
+            {errors.phone && (
+              <p className="text-danger-500 text-sm mt-1">{errors.phone}</p>
+            )}
           </div>
 
           {/* Course */}
