@@ -44,10 +44,19 @@ const IS_PRODUCTION = NODE_ENV === 'production';
 app.use(helmet());
 app.use(compression());
 
-// CORS: In production, only allow the configured FRONTEND_URL.
-// Credentials + wildcard origin is rejected by browsers, so we must be explicit.
-const allowedOrigins = process.env.FRONTEND_URL
-  ? [process.env.FRONTEND_URL]
+// CORS: In production, only allow explicitly configured frontend URLs.
+// Accept a single FRONTEND_URL or a comma-separated FRONTEND_URLS list.
+const normalizeOrigin = (value) => value?.trim().replace(/\/$/, '');
+
+const configuredOrigins = [
+  process.env.FRONTEND_URL,
+  ...(process.env.FRONTEND_URLS || '').split(','),
+]
+  .map(normalizeOrigin)
+  .filter(Boolean);
+
+const allowedOrigins = configuredOrigins.length
+  ? configuredOrigins
   : ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:5000'];
 
 app.use(
@@ -55,7 +64,7 @@ app.use(
     origin: (origin, callback) => {
       // Allow requests with no origin (e.g., mobile apps, curl, Postman)
       if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) {
+      if (allowedOrigins.includes(normalizeOrigin(origin))) {
         return callback(null, true);
       }
       // In dev, allow everything; in prod, strictly enforce
