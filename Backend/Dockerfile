@@ -3,11 +3,14 @@ FROM node:18-alpine
 # Set working directory
 WORKDIR /app
 
+# Required by the Docker HEALTHCHECK command below
+RUN apk add --no-cache curl
+
 # Copy package files
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci --only=production
+RUN npm ci --omit=dev
 
 # Copy source code
 COPY . .
@@ -16,11 +19,11 @@ COPY . .
 RUN mkdir -p uploads
 
 # Expose port
-EXPOSE 5000
+EXPOSE 10000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:5000/health || exit 1
+  CMD sh -c 'curl -f "http://localhost:${PORT:-10000}/health" || exit 1'
 
 # Start the application
-CMD ["npm", "start"]
+CMD ["node", "server.js"]
