@@ -129,18 +129,25 @@ FRONTEND_URL=http://localhost:3000
 ## 🚀 Deployment
 
 ### Backend (Render)
-1.  Connect your repository to Render.
-2.  Set **Root Directory** to `Backend`.
-3.  **Build Command**: `npm install`
-4.  **Start Command**: `npm start`
-5.  Add all required Environment Variables (see `.env.example`).
+1.  Connect your GitHub repository to Render.
+2.  Create a new **Blueprint** from the repo, or create a **Web Service** manually.
+3.  If creating it manually, set **Root Directory** to `Backend`.
+4.  **Build Command**: `npm install --legacy-peer-deps`
+5.  **Start Command**: `npm start`
+6.  Set these required environment variables:
+    - `MONGO_URI`
+    - `JWT_SECRET`
+    - `FRONTEND_URL=https://your-frontend-project.vercel.app`
+    - `NODE_ENV=production`
+7.  Verify `https://your-backend-service.onrender.com/health` returns a healthy response.
 
 ### Frontend (Vercel)
-1.  Connect your repository to Vercel.
+1.  Import the same GitHub repository into Vercel.
 2.  Set **Root Directory** to `Frontend`.
-3.  Set **Framework Preset** to `Create React App`.
-4.  **Build Command**: `npm run build`
-5.  Set `REACT_APP_API_URL` to your Render API URL (e.g., `https://api.yourdomain.com/api`).
+3.  Keep the **Framework Preset** as `Next.js`.
+4.  Set `NEXT_PUBLIC_API_URL` to your Render API URL including `/api`:
+    `https://your-backend-service.onrender.com/api`
+5.  Redeploy the frontend after the backend URL is ready.
 
 ---
 

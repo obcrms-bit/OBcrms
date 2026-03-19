@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: trust-education-crm-api
+    runtime: node
+    rootDir: Backend
+    plan: free
+    region: oregon
+    autoDeployTrigger: commit
+    buildCommand: npm install --legacy-peer-deps
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: FRONTEND_URL
+        sync: false
+      - key: MONGO_URI
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true

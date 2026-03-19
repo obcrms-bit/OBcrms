@@ -1,3 +1,2 @@
-// Root-level entry point that loads the backend server
-require('dotenv').config();
+// Root-level entry point that defers bootstrap to the backend app.
 require('./Backend/server');
