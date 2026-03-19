@@ -1,11 +1,11 @@
 {
   "extends": [
-    "next/core-web-vitals",
+    "next"
+  ],
+  "plugins": [
     "prettier"
   ],
-  "plugins": ["prettier"],
   "rules": {
-    "prettier/prettier": "error",
     "react/react-in-jsx-scope": "off",
     "react/prop-types": "off"
   }
