@@ -286,3 +286,40 @@ exports.getMe = async (req, res) => {
     sendError(res, 500, 'Failed to get profile', error.message);
   }
 };
+
+// ==================== LIST COMPANY USERS ====================
+// Supports assignment dropdowns and internal staff directories
+exports.getCompanyUsers = async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return sendError(res, 401, 'Authorization token missing');
+    }
+
+    const token = authHeader.split(' ')[1];
+
+    let decoded;
+    try {
+      decoded = jwt.verify(token, JWT_SECRET);
+    } catch (error) {
+      return sendError(res, 401, 'Invalid or expired token');
+    }
+
+    const query = {
+      companyId: decoded.companyId,
+      isActive: true,
+    };
+
+    if (req.query.role) {
+      query.role = String(req.query.role).toLowerCase();
+    }
+
+    const users = await User.find(query)
+      .select('name email role avatar jobTitle department isOnline lastSeen')
+      .sort({ name: 1 });
+
+    sendSuccess(res, 200, 'Company users retrieved', { users });
+  } catch (error) {
+    sendError(res, 500, 'Failed to get company users', error.message);
+  }
+};

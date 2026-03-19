@@ -7,6 +7,7 @@
     "dev": "nodemon server.js",
     "start": "node server.js",
     "seed": "node seeds/seed.js",
+    "seed:chat": "node seeds/chatSeed.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "lint": "eslint . --max-warnings 100",
     "lint:fix": "eslint . --fix",

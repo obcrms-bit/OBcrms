@@ -8,6 +8,11 @@ router.use(protect);
 router.get('/', restrict('admin', 'manager', 'counselor'), studentController.getStudents);
 router.post('/', restrict('admin', 'manager', 'counselor'), studentController.createStudent);
 router.get('/:id', restrict('admin', 'manager', 'counselor'), studentController.getStudentById);
+router.put(
+  '/:id/assign-counselor',
+  restrict('admin', 'manager'),
+  studentController.assignCounselor
+);
 router.put('/:id', restrict('admin', 'manager'), studentController.updateStudent);
 router.delete('/:id', restrict('admin', 'manager'), studentController.deleteStudent);
 router.patch(

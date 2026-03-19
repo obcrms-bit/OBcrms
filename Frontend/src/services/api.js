@@ -59,6 +59,7 @@ export const authAPI = {
     api.post('/auth/register', { name, email, password, role }),
   login: (email, password) => api.post('/auth/login', { email, password }),
   getMe: () => api.get('/auth/me'),
+  getUsers: (role) => api.get('/auth/users', { params: role ? { role } : {} }),
 };
 
 // ==================== LEADS (CRM) ====================
@@ -161,6 +162,8 @@ export const studentAPI = {
   createStudent: (data) => api.post('/students', data),
   updateStudent: (id, data) => api.put(`/students/${id}`, data),
   deleteStudent: (id) => api.delete(`/students/${id}`),
+  assignCounselor: (id, counselorId) =>
+    api.put(`/students/${id}/assign-counselor`, { counselorId }),
 };
 
 // ==================== APPLICANTS ====================

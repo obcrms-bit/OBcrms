@@ -1,11 +1,33 @@
 // ==================== 1. LOAD ENV FIRST ====================
-require('dotenv').config();
+const fs = require('fs');
+const path = require('path');
+const dotenv = require('dotenv');
+
+const envCandidates = [
+  path.resolve(__dirname, '.env'),
+  path.resolve(__dirname, '..', '.env'),
+];
+
+let loadedEnvFile = null;
+for (const envPath of envCandidates) {
+  if (fs.existsSync(envPath)) {
+    dotenv.config({ path: envPath });
+    loadedEnvFile = envPath;
+    break;
+  }
+}
 
 // ==================== 2. VALIDATE REQUIRED ENV VARS ====================
 const REQUIRED_ENV = ['MONGO_URI', 'JWT_SECRET'];
 const missingEnv = REQUIRED_ENV.filter((key) => !process.env[key]);
 if (missingEnv.length > 0) {
   console.error(`FATAL: Missing required environment variables: ${missingEnv.join(', ')}`);
+  if (loadedEnvFile) {
+    console.error(`Loaded environment file: ${loadedEnvFile}`);
+  } else {
+    console.error('No .env file found in Backend/ or project root.');
+  }
+  console.error('For Render, set these values in the service dashboard under Environment.');
   process.exit(1);
 }
 
@@ -113,6 +135,8 @@ const dashboardRoutes = require('./routes/dashboard.routes');
 const branchRoutes = require('./routes/branchRoutes');
 const agentRoutes = require('./routes/agent.routes');
 const visaRoutes = require('./routes/visa.routes');
+const chatRoutes = require('./routes/chat.routes');
+const { initSocket } = require('./sockets/chatSocket');
 
 // ==================== 10. MOUNT ROUTES ====================
 app.use('/api/auth', authRoutes);
@@ -125,6 +149,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/branches', branchRoutes);
 app.use('/api/agents', agentRoutes);
 app.use('/api/visa-applications', visaRoutes);
+app.use('/api/chat', chatRoutes);
 app.use('/api/visa-applications/:id/workflow', require('./routes/visaWorkflow.routes'));
 app.use('/api/visa-applications/:id/checklist', require('./routes/visaChecklist.routes'));
 app.use('/api/visa-applications/:id/financial', require('./routes/visaFinancial.routes'));
@@ -167,9 +192,12 @@ mongoose
       console.log(`🚀 Server running on port ${PORT} [${NODE_ENV}]`);
     });
 
+    const io = initSocket(server);
+
     // Graceful shutdown
     const shutdown = (signal) => {
       console.log(`\n${signal} received. Closing server gracefully...`);
+      io.close();
       server.close(() => {
         console.log('HTTP server closed.');
         mongoose.connection.close(false, () => {

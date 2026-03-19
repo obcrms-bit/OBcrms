@@ -85,6 +85,14 @@ const userSchema = new mongoose.Schema(
     department: String,
     bio: String,
 
+    // Internal chat presence
+    isOnline: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    lastSeen: Date,
+
     // Preferences
     preferredLanguage: {
       type: String,
@@ -165,6 +173,7 @@ const userSchema = new mongoose.Schema(
 userSchema.index({ companyId: 1, email: 1 }, { unique: true });
 userSchema.index({ companyId: 1, role: 1 });
 userSchema.index({ companyId: 1, isActive: 1 });
+userSchema.index({ companyId: 1, isOnline: 1 });
 
 // Middleware: Hash password before saving
 userSchema.pre('save', async function () {

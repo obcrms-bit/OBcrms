@@ -1,5 +1,6 @@
 const Student = require('../models/Student');
 const AuditLog = require('../models/AuditLog');
+const User = require('../models/User');
 const { sendSuccess, sendError } = require('../utils/responseHandler');
 const { isValidTransition } = require('../constants/workflow');
 const mongoose = require('mongoose');
@@ -10,6 +11,10 @@ exports.getStudents = async (req, res) => {
     const companyObjectId = new mongoose.Types.ObjectId(req.companyId);
     const query = { companyId: companyObjectId, deletedAt: null };
 
+    if (req.user.role === 'counselor') {
+      query.assignedCounselor = req.user._id;
+    }
+
     if (search) {
       query.$or = [
         { fullName: { $regex: search, $options: 'i' } },
@@ -19,6 +24,7 @@ exports.getStudents = async (req, res) => {
     }
 
     const students = await Student.find(query)
+      .populate('assignedCounselor', 'name email role')
       .limit(limit * 1)
       .skip((page - 1) * limit)
       .sort({ createdAt: -1 });
@@ -41,8 +47,14 @@ exports.getStudentById = async (req, res) => {
       _id: req.params.id,
       companyId: new mongoose.Types.ObjectId(req.companyId),
       deletedAt: null,
-    });
+    }).populate('assignedCounselor', 'name email role');
     if (!student) return sendError(res, 404, 'Student not found');
+    if (
+      req.user.role === 'counselor' &&
+      String(student.assignedCounselor || '') !== String(req.user._id)
+    ) {
+      return sendError(res, 403, 'You can only view students assigned to you');
+    }
     return sendSuccess(res, 200, 'Student details retrieved', student);
   } catch (error) {
     return sendError(res, 400, 'Invalid student ID', error.message);
@@ -136,6 +148,12 @@ exports.updateStudentStatus = async (req, res) => {
 
     const student = await Student.findOne({ _id: id, companyId: companyObjectId });
     if (!student) return sendError(res, 404, 'Student not found');
+    if (
+      req.user.role === 'counselor' &&
+      String(student.assignedCounselor || '') !== String(req.user._id)
+    ) {
+      return sendError(res, 403, 'You can only update students assigned to you');
+    }
 
     if (!isValidTransition('STUDENT', student.status, status)) {
       return sendError(res, 400, `Invalid status transition from ${student.status} to ${status}`);
@@ -160,5 +178,60 @@ exports.updateStudentStatus = async (req, res) => {
     return sendSuccess(res, 200, 'Student status updated', student);
   } catch (error) {
     return sendError(res, 400, 'Failed to update student status', error.message);
+  }
+};
+
+exports.assignCounselor = async (req, res) => {
+  try {
+    const { counselorId } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(counselorId)) {
+      return sendError(res, 400, 'Valid counselorId is required');
+    }
+
+    const companyObjectId = new mongoose.Types.ObjectId(req.companyId);
+
+    const counselor = await User.findOne({
+      _id: counselorId,
+      companyId: companyObjectId,
+      isActive: true,
+      role: { $in: ['counselor', 'manager'] },
+    }).select('name email role');
+
+    if (!counselor) {
+      return sendError(res, 404, 'Counselor not found in your company');
+    }
+
+    const student = await Student.findOneAndUpdate(
+      { _id: req.params.id, companyId: companyObjectId, deletedAt: null },
+      { $set: { assignedCounselor: counselor._id } },
+      { new: true, runValidators: true }
+    ).populate('assignedCounselor', 'name email role');
+
+    if (!student) return sendError(res, 404, 'Student not found');
+
+    await AuditLog.logAction({
+      companyId: req.companyId,
+      userId: req.user._id,
+      userName: req.user.name,
+      userRole: req.user.role,
+      action: 'assign_counselor',
+      resource: 'student',
+      resourceId: student._id,
+      resourceName: student.fullName,
+      changes: {
+        after: {
+          assignedCounselor: counselor._id,
+          assignedCounselorName: counselor.name,
+        },
+      },
+    });
+
+    return sendSuccess(res, 200, 'Counselor assigned successfully', {
+      student,
+      counselor,
+    });
+  } catch (error) {
+    return sendError(res, 400, 'Failed to assign counselor', error.message);
   }
 };
