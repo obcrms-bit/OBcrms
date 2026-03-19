@@ -61,6 +61,7 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const IS_PRODUCTION = NODE_ENV === 'production';
+const mongoTarget = process.env.MONGO_URI?.split('@')[1]?.split('/')[0] || 'unknown-host';
 
 // ==================== 7. APPLY MIDDLEWARE ====================
 app.use(helmet());
@@ -187,6 +188,7 @@ const mongoOptions = {
 mongoose
   .connect(process.env.MONGO_URI, mongoOptions)
   .then(() => {
+    console.log(`MongoDB target host: ${mongoTarget}`);
     console.log('✅ MongoDB Connected Successfully');
     const server = app.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT} [${NODE_ENV}]`);
@@ -211,6 +213,14 @@ mongoose
     process.on('SIGINT', () => shutdown('SIGINT')); // Ctrl+C in dev
   })
   .catch((err) => {
+    console.error(`MongoDB connection error [${mongoTarget}]`);
+    console.error('Name:', err.name);
+    if (err.cause?.message) {
+      console.error('Cause:', err.cause.message);
+    }
+    if (err.stack) {
+      console.error(err.stack);
+    }
     console.error('❌ MongoDB Connection Error:', err.message);
     process.exit(1);
   });
