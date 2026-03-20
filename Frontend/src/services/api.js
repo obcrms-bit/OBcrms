@@ -16,7 +16,7 @@ export const authAPI = {
     api.post(
       '/auth/login',
       { email, password },
-      { skipAuthHandling: true }
+      { skipAuthHandling: true, timeout: 60000 }
     ),
   getMe: () => api.get('/auth/me'),
   getUsers: (role) => api.get('/auth/users', { params: role ? { role } : {} }),

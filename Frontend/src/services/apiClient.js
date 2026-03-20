@@ -7,7 +7,6 @@ import {
   emitAuthExpired,
   getStoredRefreshToken,
   getStoredSession,
-  getStoredTenantId,
   getStoredToken,
   setStoredSession,
 } from './session';
@@ -29,21 +28,12 @@ const emitApiError = (detail = {}) => {
 const attachSessionHeaders = (config) => {
   const nextConfig = { ...config };
   const token = getStoredToken();
-  const tenantId = getStoredTenantId();
 
   nextConfig.baseURL = getApiBaseUrl();
   nextConfig.headers = nextConfig.headers || {};
 
   if (token) {
     nextConfig.headers.Authorization = `Bearer ${token}`;
-  }
-
-  if (tenantId && !nextConfig.headers['X-Tenant-Id']) {
-    nextConfig.headers['X-Tenant-Id'] = tenantId;
-  }
-
-  if (!nextConfig.headers['X-Requested-With']) {
-    nextConfig.headers['X-Requested-With'] = 'XMLHttpRequest';
   }
 
   return nextConfig;
@@ -98,7 +88,7 @@ export const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 20000,
+  timeout: 60000,
 });
 
 apiClient.interceptors.request.use(
