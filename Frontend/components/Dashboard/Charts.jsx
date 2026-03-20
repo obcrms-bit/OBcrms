@@ -1,127 +1,252 @@
 'use client';
 
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
   BarElement,
-  LineElement,
-  PointElement,
   ArcElement,
   Title,
   Tooltip,
   Legend,
 } from 'chart.js';
-import { Bar, Line, Doughnut } from 'react-chartjs-2';
+import { Bar, Doughnut } from 'react-chartjs-2';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { reportAPI } from '@/services/api';
 
 ChartJS.register(
   CategoryScale,
   LinearScale,
   BarElement,
-  LineElement,
-  PointElement,
   ArcElement,
   Title,
   Tooltip,
   Legend
 );
 
-const leadsByStageData = {
-  labels: [
-    'New',
-    'Contacted',
-    'Qualified',
-    'Proposal',
-    'Negotiation',
-    'Closed',
-  ],
-  datasets: [
-    {
-      label: 'Leads',
-      data: [400, 300, 200, 150, 100, 80],
-      backgroundColor: '#3B82F6',
+const CHART_COLORS = [
+  '#2563EB',
+  '#0EA5E9',
+  '#14B8A6',
+  '#10B981',
+  '#84CC16',
+  '#F59E0B',
+  '#F97316',
+  '#EF4444',
+  '#8B5CF6',
+  '#EC4899',
+];
+
+const chartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: {
+      display: true,
+      position: 'bottom',
     },
-  ],
+  },
 };
 
-const monthlyRevenueData = {
-  labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-  datasets: [
-    {
-      label: 'Revenue',
-      data: [45000, 52000, 48000, 61000, 55000, 67000],
-      borderColor: '#10B981',
-      backgroundColor: '#10B981',
-    },
-  ],
-};
+const formatStageLabel = (value) =>
+  String(value || 'Unassigned')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
 
-const visaSuccessData = {
-  labels: ['Approved', 'Rejected', 'Pending'],
-  datasets: [
-    {
-      data: [75, 15, 10],
-      backgroundColor: ['#10B981', '#EF4444', '#F59E0B'],
-    },
-  ],
-};
+function ChartPanel({ title, error, loading, hasData, children, onRetry }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="h-72">
+          {loading ? (
+            <div className="flex h-full items-center justify-center text-sm text-gray-500">
+              Loading chart...
+            </div>
+          ) : null}
 
-const counsellorConversionData = {
-  labels: [
-    'Sarah Johnson',
-    'Mike Chen',
-    'Lisa Wong',
-    'David Kim',
-    'Alex Rodriguez',
-  ],
-  datasets: [
-    {
-      label: 'Conversion %',
-      data: [85, 78, 92, 71, 88],
-      backgroundColor: '#8B5CF6',
-    },
-  ],
-};
+          {!loading && error ? (
+            <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
+              <p className="text-sm text-gray-600">{error}</p>
+              <button
+                type="button"
+                onClick={onRetry}
+                className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+              >
+                Retry
+              </button>
+            </div>
+          ) : null}
+
+          {!loading && !error && !hasData ? (
+            <div className="flex h-full items-center justify-center text-sm text-gray-500">
+              No data available
+            </div>
+          ) : null}
+
+          {!loading && !error && hasData ? children : null}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function Charts() {
+  const [reports, setReports] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const loadCharts = useCallback(async () => {
+    setLoading(true);
+    setError('');
+
+    try {
+      const response = await reportAPI.getSummary();
+      setReports(response.data?.data || null);
+    } catch (requestError) {
+      console.error('Failed to load chart data:', requestError);
+      setReports(null);
+      setError(
+        requestError?.response?.data?.message ||
+          requestError?.message ||
+          'Failed to load chart data.'
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadCharts();
+  }, [loadCharts]);
+
+  const leadStageChart = useMemo(() => {
+    const rows = reports?.leadStatusFunnel || [];
+    if (!rows.length) {
+      return null;
+    }
+
+    return {
+      labels: rows.map((item) => formatStageLabel(item.stage)),
+      datasets: [
+        {
+          label: 'Leads',
+          data: rows.map((item) => item.count || 0),
+          backgroundColor: CHART_COLORS.slice(0, rows.length),
+        },
+      ],
+    };
+  }, [reports]);
+
+  const applicationStageChart = useMemo(() => {
+    const rows = reports?.applicationStages || [];
+    if (!rows.length) {
+      return null;
+    }
+
+    return {
+      labels: rows.map((item) => formatStageLabel(item.stage)),
+      datasets: [
+        {
+          label: 'Applications',
+          data: rows.map((item) => item.count || 0),
+          backgroundColor: CHART_COLORS.slice(0, rows.length),
+          borderWidth: 0,
+        },
+      ],
+    };
+  }, [reports]);
+
+  const sourcePerformanceChart = useMemo(() => {
+    const rows = reports?.sourcePerformance || [];
+    if (!rows.length) {
+      return null;
+    }
+
+    return {
+      labels: rows.map((item) => formatStageLabel(item.sourceType)),
+      datasets: [
+        {
+          label: 'Leads',
+          data: rows.map((item) => item.count || 0),
+          backgroundColor: '#2563EB',
+        },
+        {
+          label: 'Converted',
+          data: rows.map((item) => item.converted || 0),
+          backgroundColor: '#10B981',
+        },
+      ],
+    };
+  }, [reports]);
+
+  const branchPerformanceChart = useMemo(() => {
+    const rows = reports?.branchPerformance || [];
+    if (!rows.length) {
+      return null;
+    }
+
+    return {
+      labels: rows.map((item) => item.branchName || 'Unassigned'),
+      datasets: [
+        {
+          label: 'Leads',
+          data: rows.map((item) => item.leads || 0),
+          backgroundColor: '#8B5CF6',
+        },
+        {
+          label: 'Converted',
+          data: rows.map((item) => item.converted || 0),
+          backgroundColor: '#14B8A6',
+        },
+      ],
+    };
+  }, [reports]);
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Leads by Stage</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Bar data={leadsByStageData} />
-        </CardContent>
-      </Card>
+      <ChartPanel
+        title="Leads by Stage"
+        loading={loading}
+        error={error}
+        hasData={Boolean(leadStageChart)}
+        onRetry={loadCharts}
+      >
+        <Bar data={leadStageChart} options={chartOptions} />
+      </ChartPanel>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Monthly Revenue</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Line data={monthlyRevenueData} />
-        </CardContent>
-      </Card>
+      <ChartPanel
+        title="Application Stages"
+        loading={loading}
+        error={error}
+        hasData={Boolean(applicationStageChart)}
+        onRetry={loadCharts}
+      >
+        <Doughnut data={applicationStageChart} options={chartOptions} />
+      </ChartPanel>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Visa Success Rate</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Doughnut data={visaSuccessData} />
-        </CardContent>
-      </Card>
+      <ChartPanel
+        title="Lead Sources"
+        loading={loading}
+        error={error}
+        hasData={Boolean(sourcePerformanceChart)}
+        onRetry={loadCharts}
+      >
+        <Bar data={sourcePerformanceChart} options={chartOptions} />
+      </ChartPanel>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Conversion per Counsellor</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Bar data={counsellorConversionData} />
-        </CardContent>
-      </Card>
+      <ChartPanel
+        title="Branch Performance"
+        loading={loading}
+        error={error}
+        hasData={Boolean(branchPerformanceChart)}
+        onRetry={loadCharts}
+      >
+        <Bar data={branchPerformanceChart} options={chartOptions} />
+      </ChartPanel>
     </div>
   );
 }

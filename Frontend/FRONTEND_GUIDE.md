@@ -64,19 +64,15 @@ mongod
 
 ## Test User Credentials
 
-### Demo Account 1 (Admin)
-- **Email**: admin@seed.com
-- **Password**: admin123
+These credentials are for local seeded development only. They are not guaranteed to exist on Render or any shared production database.
 
-### Demo Account 2 (Counselor 1)
-- **Email**: counselor1@seed.com
-- **Password**: counselor123
+### Local Seeded Accounts Only
+- **Super Admin**: `admin@trusteducation.com / Trust@2025`
 
-### Demo Account 3 (Counselor 2)
-- **Email**: counselor2@seed.com
-- **Password**: counselor123
-
-**Note**: These credentials are created automatically when you run `npm run seed`
+**Important**:
+- These credentials only exist if you run `cd Backend && npm run seed` against a non-production database.
+- Do not run the seed command on production because it clears data first.
+- For production super admin recovery, use [SUPERADMIN_RECOVERY.md](c:/Users/ACER/OneDrive/Documents/Projects/trust-education-crm-erp/SUPERADMIN_RECOVERY.md).
 
 ### How to Create Test Accounts (Automated)
 
@@ -88,17 +84,13 @@ cd Backend
 npm run seed
 ```
 
-This automatically creates:
-- 1 Admin account
-- 2 Counselor accounts
-- 20 test Students (some assigned to counselors)
+This automatically creates seeded test records for local development.
 
 **Output:**
 ```
-Seed finished. You can now login with the following credentials:
- - Admin: admin@seed.com / admin123
- - Counselor1: counselor1@seed.com / counselor123
- - Counselor2: counselor2@seed.com / counselor123
+Seed completed successfully.
+Login: admin@trusteducation.com
+Password: Trust@2025
 ```
 
 ### Manual Account Creation (Optional)
@@ -112,11 +104,13 @@ Content-Type: application/json
 
 {
   "name": "Admin User",
-  "email": "admin@test.com",
-  "password": "admin123",
+  "email": "local-admin@example.com",
+  "password": "replace-with-a-secure-password",
   "role": "admin"
 }
 ```
+
+This manual example is for development only. It does not create a `super_admin`.
 
 **Register Counselor:**
 ```
@@ -125,8 +119,8 @@ Content-Type: application/json
 
 {
   "name": "Counselor User",
-  "email": "counselor@test.com",
-  "password": "counselor123",
+  "email": "local-counselor@example.com",
+  "password": "replace-with-a-secure-password",
   "role": "counselor"
 }
 ```

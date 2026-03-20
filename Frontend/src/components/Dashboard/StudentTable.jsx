@@ -92,7 +92,7 @@ const StudentTable = ({ students, loading, onEdit, onDelete, onView }) => {
                 <span
                   className={`badge ${getStatusBadgeColor(student.status)}`}
                 >
-                  {student.status || 'New'}
+                  {student.status || 'No status'}
                 </span>
               </td>
               <td className="px-6 py-4">

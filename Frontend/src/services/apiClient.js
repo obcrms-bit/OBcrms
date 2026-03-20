@@ -12,6 +12,7 @@ import {
   setStoredSession,
 } from './session';
 import { getApiErrorMessage } from './apiUtils';
+import { clearStoredWorkspaceSelection } from './workspace';
 
 export const API_ERROR_EVENT = 'trust-education:api-error';
 
@@ -136,6 +137,7 @@ apiClient.interceptors.response.use(
 
     if (status === 401 && !originalRequest.skipAuthHandling) {
       clearStoredSession();
+      clearStoredWorkspaceSelection();
       emitAuthExpired({
         reason:
           normalizedError?.response?.data?.message || 'Your session has expired.',

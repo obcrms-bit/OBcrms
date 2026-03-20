@@ -74,6 +74,19 @@ Important note:
 
 - `render.yaml` in this repo already defines the backend blueprint and now pins deployment to `main`
 
+## Super Admin Recovery
+
+If the production database does not contain a working super admin account, use the one-off recovery script in [SUPERADMIN_RECOVERY.md](c:/Users/ACER/OneDrive/Documents/Projects/trust-education-crm-erp/SUPERADMIN_RECOVERY.md).
+
+Backend command:
+
+```bash
+cd Backend
+npm run bootstrap:super-admin
+```
+
+This script is safe for production recovery because it does not wipe data. It only creates or updates the targeted super admin account.
+
 ## Vercel Settings
 
 Connect this repo to Vercel and make sure these settings are used:

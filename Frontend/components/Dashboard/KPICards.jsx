@@ -1,69 +1,107 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Users, FileText, Phone, Calendar } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  AlertCircle,
+  CalendarClock,
+  ClipboardList,
+  DollarSign,
+  FileText,
+  GraduationCap,
+  Users,
+} from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
-import { dashboardAPI } from '@/services/api';
+import { dashboardAPI, leadAPI } from '@/services/api';
 
-const defaultKpiData = [
-  { title: 'Employees', value: '45', icon: Users, change: '+2' },
-  { title: 'Leads', value: '1,234', icon: FileText, change: '+12%' },
-  { title: 'Students', value: '856', icon: Users, change: '+8%' },
-  { title: 'Applications', value: '342', icon: FileText, change: '+15%' },
-  { title: 'Call Logs', value: '2,156', icon: Phone, change: '+23%' },
-  { title: 'Classes', value: '28', icon: Calendar, change: '+1' },
-];
+const formatMetricValue = (value, formatter) => {
+  if (typeof formatter === 'function') {
+    return formatter(value);
+  }
+
+  const numericValue = Number(value ?? 0);
+  return Number.isFinite(numericValue) ? numericValue.toLocaleString() : '0';
+};
 
 export default function KPICards() {
-  const [kpiData, setKpiData] = useState(defaultKpiData);
+  const [kpiData, setKpiData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  useEffect(() => {
-    fetchKPIData();
-  }, []);
-
-  const fetchKPIData = async () => {
+  const fetchKPIData = useCallback(async () => {
+    setLoading(true);
+    setError('');
     try {
-      const response = await dashboardAPI.getDashboardStats();
-      const data = response.data.data;
+      const [statsResponse, followUpResponse] = await Promise.all([
+        dashboardAPI.getDashboardStats(),
+        leadAPI.getFollowUpSummary(),
+      ]);
 
-      // Map API data to KPI format
-      const apiKpiData = [
-        {
-          title: 'Students',
-          value: data.totalStudents?.toString() || '0',
-          icon: Users,
-          change: '+8%',
-        },
+      const stats = statsResponse.data?.data || {};
+      const summary = followUpResponse.data?.data || {};
+      const counts = summary.counts || {};
+
+      setKpiData([
         {
           title: 'Leads',
-          value: data.totalLeads?.toString() || '0',
+          value: formatMetricValue(stats.totalLeads),
+          helper: 'Total CRM leads',
           icon: FileText,
-          change: '+12%',
+        },
+        {
+          title: 'Students',
+          value: formatMetricValue(stats.totalStudents),
+          helper: 'Active student records',
+          icon: GraduationCap,
         },
         {
           title: 'Applications',
-          value: data.totalApplications?.toString() || '0',
-          icon: FileText,
-          change: '+15%',
+          value: formatMetricValue(stats.totalApplications),
+          helper: 'Open and submitted applications',
+          icon: ClipboardList,
         },
         {
           title: 'Revenue',
-          value: `$${(data.revenue || 0).toLocaleString()}`,
-          icon: Calendar,
-          change: '+10%',
+          value: formatMetricValue(
+            stats.revenue,
+            (amount) =>
+              new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: 'USD',
+                maximumFractionDigits: 0,
+              }).format(Number(amount || 0))
+          ),
+          helper: 'Paid invoice revenue',
+          icon: DollarSign,
         },
-        { title: 'Call Logs', value: '2,156', icon: Phone, change: '+23%' },
-        { title: 'Classes', value: '28', icon: Calendar, change: '+1' },
-      ];
-      setKpiData(apiKpiData);
+        {
+          title: 'Due Today',
+          value: formatMetricValue(counts.dueToday),
+          helper: 'Follow-ups scheduled today',
+          icon: CalendarClock,
+        },
+        {
+          title: 'Overdue',
+          value: formatMetricValue(counts.overdue),
+          helper: 'Follow-ups that missed schedule',
+          icon: AlertCircle,
+        },
+      ]);
     } catch (error) {
       console.error('Error fetching KPI data:', error);
-      // Keep default data if API fails
+      setKpiData([]);
+      setError(
+        error?.response?.data?.message ||
+          error?.message ||
+          'Failed to load dashboard metrics.'
+      );
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchKPIData();
+  }, [fetchKPIData]);
 
   if (loading) {
     return (
@@ -85,6 +123,41 @@ export default function KPICards() {
     );
   }
 
+  if (error) {
+    return (
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex flex-col gap-3">
+            <div>
+              <p className="text-sm font-semibold text-gray-900">Dashboard metrics</p>
+              <p className="mt-1 text-sm text-gray-600">{error}</p>
+            </div>
+            <button
+              type="button"
+              onClick={fetchKPIData}
+              className="w-fit rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+            >
+              Retry
+            </button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!kpiData.length) {
+    return (
+      <Card>
+        <CardContent className="p-4">
+          <p className="text-sm font-semibold text-gray-900">No data available</p>
+          <p className="mt-1 text-sm text-gray-600">
+            Dashboard metrics will appear here when backend data is available.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
       {kpiData.map((kpi) => (
@@ -96,7 +169,7 @@ export default function KPICards() {
                   {kpi.title}
                 </p>
                 <p className="text-2xl font-bold">{kpi.value}</p>
-                <p className="text-xs text-green-600">{kpi.change}</p>
+                <p className="text-xs text-gray-500">{kpi.helper}</p>
               </div>
               <kpi.icon className="h-8 w-8 text-blue-500" />
             </div>

@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Users,
   BookOpen,
-  CheckCircle,
-  Clock,
+  DollarSign,
+  ClipboardList,
   Plus,
   Search,
 } from 'lucide-react';
@@ -12,11 +12,19 @@ import StatsCard from '../components/Dashboard/StatsCard';
 import StudentTable from '../components/Dashboard/StudentTable';
 import StudentFormModal from '../components/Dashboard/StudentFormModal';
 import { LoadingSpinner } from '../components/Common';
-import { dashboardAPI } from '../services/api';
+import { dashboardAPI, leadAPI } from '../services/api';
 import * as studentService from '../services/studentService';
+
+const formatCurrency = (value) =>
+  new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(Number(value || 0));
 
 const AdminDashboard = () => {
   const [stats, setStats] = useState(null);
+  const [summary, setSummary] = useState(null);
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [studentLoading, setStudentLoading] = useState(false);
@@ -25,42 +33,57 @@ const AdminDashboard = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
+  const [error, setError] = useState('');
 
-  // Fetch stats
-  useEffect(() => {
-    fetchStats();
-  }, []);
-
-  // Fetch students
-  useEffect(() => {
-    fetchStudents();
-  }, [page, search]);
-
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async () => {
     try {
-      const response = await dashboardAPI.getDashboardStats();
-      setStats(response.data.data);
-    } catch (error) {
-      console.error('Failed to fetch stats:', error);
+      const [statsResponse, summaryResponse] = await Promise.all([
+        dashboardAPI.getDashboardStats(),
+        leadAPI.getFollowUpSummary(),
+      ]);
+      setStats(statsResponse.data?.data || null);
+      setSummary(summaryResponse.data?.data || null);
+    } catch (requestError) {
+      console.error('Failed to fetch stats:', requestError);
+      setStats(null);
+      setSummary(null);
+      setError(
+        requestError?.response?.data?.message ||
+          requestError?.message ||
+          'Failed to load dashboard data.'
+      );
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchStudents = async () => {
+  const fetchStudents = useCallback(async () => {
     setStudentLoading(true);
     try {
       const response = await studentService.getStudents(page, 10, search);
       if (response.success) {
         setStudents(response.data.students || response.data);
         setTotalPages(response.data.totalPages || 1);
+      } else {
+        setStudents([]);
+        setTotalPages(1);
       }
-    } catch (error) {
-      console.error('Failed to fetch students:', error);
+    } catch (requestError) {
+      console.error('Failed to fetch students:', requestError);
+      setStudents([]);
+      setTotalPages(1);
     } finally {
       setStudentLoading(false);
     }
-  };
+  }, [page, search]);
+
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
+
+  useEffect(() => {
+    fetchStudents();
+  }, [fetchStudents]);
 
   const handleAddStudent = () => {
     setSelectedStudent(null);
@@ -77,8 +100,8 @@ const AdminDashboard = () => {
       try {
         await studentService.deleteStudent(id);
         fetchStudents();
-      } catch (error) {
-        console.error('Failed to delete student:', error);
+      } catch (requestError) {
+        console.error('Failed to delete student:', requestError);
         alert('Failed to delete student');
       }
     }
@@ -95,8 +118,8 @@ const AdminDashboard = () => {
       setSelectedStudent(null);
       fetchStudents();
       fetchStats();
-    } catch (error) {
-      console.error('Failed to save student:', error);
+    } catch (requestError) {
+      console.error('Failed to save student:', requestError);
       alert('Failed to save student');
     }
   };
@@ -116,15 +139,16 @@ const AdminDashboard = () => {
     );
   }
 
+  const counts = summary?.counts || {};
+
   return (
     <DashboardLayout>
       <div className="space-y-8">
-        {/* Header */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
             <p className="text-gray-600 mt-2">
-              Manage students and track performance
+              Manage students and monitor live CRM workload from real backend data.
             </p>
           </div>
           <button
@@ -136,45 +160,44 @@ const AdminDashboard = () => {
           </button>
         </div>
 
-        {/* Stats Grid */}
+        {error ? (
+          <div className="card p-6 border border-red-100 bg-red-50">
+            <p className="text-sm font-semibold text-red-700">{error}</p>
+          </div>
+        ) : null}
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <StatsCard
             title="Total Students"
             value={stats?.totalStudents || 0}
             icon={Users}
             color="primary"
-            trend={12}
-            description="Increase from last month"
+            description="Student records in the tenant"
+          />
+          <StatsCard
+            title="Leads"
+            value={stats?.totalLeads || 0}
+            icon={ClipboardList}
+            color="warning"
+            description="Active CRM leads"
           />
           <StatsCard
             title="Applications"
             value={stats?.totalApplications || 0}
             icon={BookOpen}
-            color="warning"
-            trend={8}
-            description="New applications"
-          />
-          <StatsCard
-            title="Visa Approved"
-            value={stats?.visaApprovedCount || 0}
-            icon={CheckCircle}
             color="success"
-            trend={15}
-            description="Successful approvals"
+            description="Applications in workflow"
           />
           <StatsCard
-            title="Pending"
-            value={stats?.pendingCount || 0}
-            icon={Clock}
+            title="Revenue"
+            value={formatCurrency(stats?.revenue || 0)}
+            icon={DollarSign}
             color="danger"
-            trend={-5}
-            description="Awaiting action"
+            description="Paid invoice revenue"
           />
         </div>
 
-        {/* Students Section */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Main Students Table */}
           <div className="lg:col-span-3">
             <div className="card p-6">
               <div className="flex items-center justify-between mb-6">
@@ -194,7 +217,6 @@ const AdminDashboard = () => {
                 </div>
               </div>
 
-              {/* Student Table */}
               <StudentTable
                 students={students}
                 loading={studentLoading}
@@ -202,7 +224,6 @@ const AdminDashboard = () => {
                 onDelete={handleDeleteStudent}
               />
 
-              {/* Pagination */}
               {totalPages > 1 && (
                 <div className="flex items-center justify-between mt-6 pt-6 border-t border-gray-200">
                   <p className="text-sm text-gray-600">
@@ -230,44 +251,40 @@ const AdminDashboard = () => {
             </div>
           </div>
 
-          {/* Sidebar */}
           <div className="space-y-6">
-            {/* Quick Actions */}
             <div className="card p-6">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">
-                Quick Actions
-              </h3>
+              <h3 className="text-lg font-bold text-gray-900 mb-4">Quick Actions</h3>
               <div className="space-y-3">
-                <button
-                  onClick={handleAddStudent}
-                  className="w-full btn-primary"
-                >
+                <button onClick={handleAddStudent} className="w-full btn-primary">
                   Add New Student
                 </button>
-                <button className="w-full btn-secondary">View Reports</button>
-                <button className="w-full btn-secondary">
-                  Manage Counselors
-                </button>
+                <button className="w-full btn-secondary">Open Leads</button>
+                <button className="w-full btn-secondary">Review Applications</button>
               </div>
             </div>
 
-            {/* Tasks */}
             <div className="card p-6">
               <h3 className="text-lg font-bold text-gray-900 mb-4">
-                This Week
+                Follow-up Snapshot
               </h3>
-              <div className="space-y-3">
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-primary-500 rounded-full"></div>
-                  <p className="text-sm text-gray-700">5 application reviews</p>
+              <div className="space-y-3 text-sm text-gray-700">
+                <div className="flex items-center justify-between">
+                  <span>Due today</span>
+                  <span className="font-semibold">{counts.dueToday || 0}</span>
                 </div>
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-warning-500 rounded-full"></div>
-                  <p className="text-sm text-gray-700">3 counselor meetings</p>
+                <div className="flex items-center justify-between">
+                  <span>Overdue</span>
+                  <span className="font-semibold">{counts.overdue || 0}</span>
                 </div>
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-success-500 rounded-full"></div>
-                  <p className="text-sm text-gray-700">2 visa approvals</p>
+                <div className="flex items-center justify-between">
+                  <span>Completed today</span>
+                  <span className="font-semibold">{counts.completedToday || 0}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>No future follow-up</span>
+                  <span className="font-semibold">
+                    {counts.leadsWithoutFutureFollowUp || 0}
+                  </span>
                 </div>
               </div>
             </div>
@@ -275,7 +292,6 @@ const AdminDashboard = () => {
         </div>
       </div>
 
-      {/* Student Form Modal */}
       <StudentFormModal
         isOpen={modalOpen}
         onClose={() => {

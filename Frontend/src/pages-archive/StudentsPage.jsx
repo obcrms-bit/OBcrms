@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { studentAPI } from '../services/api';
 import { useBranding } from '../context/BrandingContext';
 import { useAuth } from '../context/AuthContext';
@@ -20,7 +20,7 @@ const StudentsPage = () => {
   const { branding } = useBranding();
   const { user } = useAuth();
 
-  const fetchStudents = async () => {
+  const fetchStudents = useCallback(async () => {
     try {
       const response = await studentAPI.getAllStudents(page, 10);
       setStudents(response.data.data.students);
@@ -30,11 +30,11 @@ const StudentsPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [page]);
 
   useEffect(() => {
     fetchStudents();
-  }, [page]);
+  }, [fetchStudents]);
 
   const updateStatus = async (id, status) => {
     try {

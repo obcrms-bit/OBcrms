@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { useAuth } from '../../context/AuthContext';
 import { useBranding } from '../../context/BrandingContext';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -123,9 +124,12 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
         {/* Logo Area */}
         <div className="h-16 flex items-center gap-3 border-b border-gray-50 px-6 overflow-hidden">
           {branding.logo ? (
-            <img
+            <Image
               src={branding.logo}
               alt="Logo"
+              width={32}
+              height={32}
+              unoptimized
               className="h-8 w-8 object-contain"
             />
           ) : (

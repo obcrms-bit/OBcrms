@@ -1,9 +1,26 @@
-import React from 'react';
-import { Search, MapPin, Grid, Bell, User, Menu } from 'lucide-react';
+import React, { useCallback, useEffect, useState } from 'react';
+import Image from 'next/image';
+import { Search, Bell, User, Menu } from 'lucide-react';
 import { useBranding } from '../../context/BrandingContext';
+import { notificationAPI } from '../../services/api';
 
 const Topbar = ({ toggleSidebar }) => {
   const { branding } = useBranding();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const loadNotifications = useCallback(async () => {
+    try {
+      const response = await notificationAPI.getNotifications({ limit: 5 });
+      setUnreadCount(response.data?.data?.unreadCount || 0);
+    } catch (error) {
+      console.error('Failed to fetch notification count:', error);
+      setUnreadCount(0);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadNotifications();
+  }, [loadNotifications]);
 
   return (
     <header
@@ -31,9 +48,11 @@ const Topbar = ({ toggleSidebar }) => {
         <div className="flex items-center gap-3 mr-4">
           <button className="p-2 hover:bg-white/10 rounded-full transition-colors relative">
             <Bell size={20} />
-            <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">
-              8
-            </span>
+            {unreadCount > 0 ? (
+              <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] min-w-4 h-4 rounded-full flex items-center justify-center font-bold px-1">
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            ) : null}
           </button>
           <button className="p-2 hover:bg-white/10 rounded-full transition-colors focus:ring-2 focus:ring-white/30">
             <User size={20} />
@@ -49,9 +68,12 @@ const Topbar = ({ toggleSidebar }) => {
             <p className="text-sm font-medium leading-none">{branding.name}</p>
           </div>
           {branding.logo ? (
-            <img
+            <Image
               src={branding.logo}
               alt={branding.name}
+              width={40}
+              height={40}
+              unoptimized
               className="h-10 w-10 object-contain rounded bg-white p-1 shadow-sm"
             />
           ) : (

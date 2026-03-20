@@ -50,6 +50,16 @@ const LEAD_STATUSES = [
   'lost',
 ];
 
+const getLeadDisplayName = (lead) =>
+  [
+    lead?.name,
+    lead?.fullName,
+    [lead?.firstName, lead?.lastName].filter(Boolean).join(' ').trim(),
+  ].find((value) => String(value || '').trim()) || 'Unnamed lead';
+
+const getLeadPrimaryContact = (lead) =>
+  lead?.mobile || lead?.phone || lead?.email || 'No contact info';
+
 export default function LeadsPage() {
   const router = useRouter();
   const [actionError, setActionError] = useState('');
@@ -387,10 +397,10 @@ export default function LeadsPage() {
                               type="button"
                             >
                               <div className="font-semibold text-slate-900">
-                                {lead.firstName} {lead.lastName}
+                                {getLeadDisplayName(lead)}
                               </div>
-                              <div className="text-sm text-slate-500">{lead.email}</div>
-                              <div className="text-sm text-slate-500">{lead.phone}</div>
+                              <div className="text-sm text-slate-500">{lead.email || 'No email'}</div>
+                              <div className="text-sm text-slate-500">{getLeadPrimaryContact(lead)}</div>
                             </button>
                           </td>
                           <td className="py-4 text-sm text-slate-600">

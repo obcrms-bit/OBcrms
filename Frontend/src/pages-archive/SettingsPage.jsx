@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { useBranding } from '../context/BrandingContext';
 import { Save, Upload, Palette, Building } from 'lucide-react';
 
@@ -146,9 +147,12 @@ const SettingsPage = () => {
                   <div className="w-24 h-24 rounded-xl bg-gray-50 border-2 border-dashed border-gray-200 flex items-center justify-center overflow-hidden relative group">
                     {formData.logo ? (
                       <>
-                        <img
+                        <Image
                           src={formData.logo}
                           alt="Preview"
+                          width={96}
+                          height={96}
+                          unoptimized
                           className="w-full h-full object-contain"
                         />
                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">

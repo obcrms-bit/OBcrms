@@ -31,11 +31,11 @@ const emptyWorkflowForm = {
 };
 
 const emptySubscriptionForm = {
-  plan: 'starter',
-  status: 'trial',
+  plan: '',
+  status: '',
   billingCycle: 'monthly',
-  userLimit: 10,
-  branchLimit: 2,
+  userLimit: 0,
+  branchLimit: 0,
   bulkImports: false,
   advancedWorkflows: false,
   notifications: true,
@@ -91,11 +91,11 @@ export default function OrganizationPage() {
       }
       if (data?.subscription) {
         setSubscriptionForm({
-          plan: data.subscription.plan || 'starter',
-          status: data.subscription.status || 'trial',
+          plan: data.subscription.plan || '',
+          status: data.subscription.status || '',
           billingCycle: data.subscription.billingCycle || 'monthly',
-          userLimit: data.subscription.userLimit || 10,
-          branchLimit: data.subscription.branchLimit || 2,
+          userLimit: data.subscription.userLimit || 0,
+          branchLimit: data.subscription.branchLimit || 0,
           bulkImports: Boolean(data.subscription.featureAccess?.bulkImports),
           advancedWorkflows: Boolean(data.subscription.featureAccess?.advancedWorkflows),
           notifications: Boolean(data.subscription.featureAccess?.notifications),
@@ -592,6 +592,7 @@ export default function OrganizationPage() {
                         }))
                       }
                     >
+                      <option value="">Select plan</option>
                       <option value="starter">Starter</option>
                       <option value="growth">Growth</option>
                       <option value="enterprise">Enterprise</option>
@@ -609,6 +610,7 @@ export default function OrganizationPage() {
                         }))
                       }
                     >
+                      <option value="">Select status</option>
                       <option value="trial">Trial</option>
                       <option value="active">Active</option>
                       <option value="past_due">Past Due</option>
@@ -691,7 +693,12 @@ export default function OrganizationPage() {
 
                 <button
                   type="submit"
-                  disabled={savingSubscription || !canManageSettings}
+                  disabled={
+                    savingSubscription ||
+                    !canManageSettings ||
+                    !subscriptionForm.plan ||
+                    !subscriptionForm.status
+                  }
                   className="rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60"
                 >
                   {savingSubscription ? 'Saving...' : 'Save Subscription'}

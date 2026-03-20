@@ -604,7 +604,7 @@ export default App;
 
 ## 🚀 Next Steps
 
-1. Test login with `admin@seed.com / admin123`
+1. Test login with the credentials provisioned for your environment
 2. Verify admin dashboard loads with stats
 3. Test counselor dashboard
 4. Add Student CRUD operations

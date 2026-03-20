@@ -23,7 +23,6 @@ function LoginPage() {
 
       const response = await login(email, password);
       if (response?.success && response?.user) {
-        // Navigate based on user role
         const userRole = response.user.role?.toLowerCase();
         if (userRole === 'admin') {
           navigate('/admin');
@@ -188,11 +187,11 @@ function LoginPage() {
             borderRadius: '5px',
           }}
         >
-          <strong>📝 Demo Credentials:</strong>
+          <strong>Credentials:</strong>
           <br />
-          <strong>Admin:</strong> admin@seed.com / admin123
+          Use the credentials provisioned for your environment.
           <br />
-          <strong>Counselor:</strong> counselor1@seed.com / counselor123
+          Local-only seeded login: admin@trusteducation.com / Trust@2025
         </div>
       </div>
     </div>

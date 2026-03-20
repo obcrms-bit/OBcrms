@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { User, Settings, LogOut, ChevronDown, Sun, Moon } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import {
@@ -19,17 +19,60 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { branchAPI } from '@/services/api';
 import KPICards from './KPICards';
 
 export default function Header({ darkMode, setDarkMode }) {
   const { user, logout } = useAuth();
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [selectedBranch, setSelectedBranch] = useState('Main Branch');
+  const [selectedBranch, setSelectedBranch] = useState('');
+  const [branches, setBranches] = useState([]);
+  const [loadingBranches, setLoadingBranches] = useState(true);
+  const [branchError, setBranchError] = useState('');
+
+  const loadBranches = useCallback(async () => {
+    setLoadingBranches(true);
+    setBranchError('');
+
+    try {
+      const response = await branchAPI.getBranches();
+      const nextBranches = response.data?.data || [];
+      setBranches(nextBranches);
+
+      if (nextBranches.length) {
+        const defaultBranch =
+          nextBranches.find(
+            (branch) =>
+              String(branch._id || branch.id || '') ===
+              String(user?.branchId?._id || user?.branchId || '')
+          ) || nextBranches[0];
+
+        setSelectedBranch(String(defaultBranch._id || defaultBranch.id || ''));
+      } else {
+        setSelectedBranch('');
+      }
+    } catch (error) {
+      console.error('Failed to fetch branches:', error);
+      setBranches([]);
+      setSelectedBranch('');
+      setBranchError(
+        error?.response?.data?.message ||
+          error?.message ||
+          'Failed to load branches.'
+      );
+    } finally {
+      setLoadingBranches(false);
+    }
+  }, [user?.branchId]);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    loadBranches();
+  }, [loadBranches]);
 
   return (
     <header className="bg-white shadow-sm border-b p-4 dark:bg-gray-800 dark:border-gray-700">
@@ -43,16 +86,35 @@ export default function Header({ darkMode, setDarkMode }) {
           </div>
         </div>
         <div className="flex items-center space-x-4">
-          <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-            <SelectTrigger className="w-48">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Main Branch">Main Branch</SelectItem>
-              <SelectItem value="Branch 1">Branch 1</SelectItem>
-              <SelectItem value="Branch 2">Branch 2</SelectItem>
-            </SelectContent>
-          </Select>
+          {loadingBranches ? (
+            <div className="rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-500">
+              Loading branches...
+            </div>
+          ) : null}
+
+          {!loadingBranches && branches.length ? (
+            <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="Select branch" />
+              </SelectTrigger>
+              <SelectContent>
+                {branches.map((branch) => {
+                  const value = String(branch._id || branch.id || branch.name);
+                  return (
+                    <SelectItem key={value} value={value}>
+                      {branch.name || 'Unnamed branch'}
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+          ) : null}
+
+          {!loadingBranches && !branches.length ? (
+            <div className="rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-500">
+              {branchError || 'No branches available'}
+            </div>
+          ) : null}
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -92,7 +92,7 @@ const LeadDetailPage = () => {
   });
   const [selectedStatus, setSelectedStatus] = useState('');
 
-  const fetchLead = async () => {
+  const fetchLead = useCallback(async () => {
     setLoading(true);
     try {
       const res = await leadAPI.getLeadById(id);
@@ -103,11 +103,11 @@ const LeadDetailPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
   useEffect(() => {
     fetchLead();
-  }, [id]);
+  }, [fetchLead]);
 
   const handleAddNote = async () => {
     if (!newNote.trim()) return;

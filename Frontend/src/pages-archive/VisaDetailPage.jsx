@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -111,7 +111,7 @@ const VisaDetailPage = () => {
     rejectionReason: '',
   });
 
-  const fetchVisa = async () => {
+  const fetchVisa = useCallback(async () => {
     setLoading(true);
     try {
       const res = await visaAPI.getById(id);
@@ -122,11 +122,11 @@ const VisaDetailPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
   useEffect(() => {
     fetchVisa();
-  }, [id]);
+  }, [fetchVisa]);
 
   const action = async (key, fn) => {
     setActionLoading(key);
@@ -755,8 +755,7 @@ const VisaDetailPage = () => {
                       onClick={() =>
                         action('interview_complete', () =>
                           visaAPI.completeInterview(id, {
-                            mockInterviewScore: 7,
-                            outcomeNotes: 'Completed',
+                            outcomeNotes: 'Interview marked complete',
                           })
                         )
                       }

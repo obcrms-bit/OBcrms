@@ -223,14 +223,26 @@ export default function AppShell({
         return;
       }
 
+      const nextBranches =
+        requests[0].status === 'fulfilled' ? requests[0].value?.data?.data || [] : [];
+      const persistedBranchId = getSelectedBranchId();
+      const isPersistedBranchAccessible = nextBranches.some(
+        (branch) => String(branch?._id || '') === String(persistedBranchId || '')
+      );
+
       setBranches(
-        requests[0].status === 'fulfilled' ? requests[0].value?.data?.data || [] : []
+        nextBranches
       );
       setUnreadCount(
         requests[1].status === 'fulfilled'
           ? requests[1].value?.data?.data?.unreadCount || 0
           : 0
       );
+
+      if (persistedBranchId && nextBranches.length && !isPersistedBranchAccessible) {
+        setSelectedBranchId('');
+        persistSelectedBranchId('');
+      }
     };
 
     loadWorkspaceMeta();

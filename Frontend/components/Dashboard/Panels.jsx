@@ -1,49 +1,126 @@
 'use client';
 
-import { Bell, CheckSquare, Calendar, Users } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  AlertCircle,
+  Bell,
+  Calendar,
+  CheckSquare,
+  Users,
+} from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { leadAPI, notificationAPI } from '@/services/api';
 
-const panelsData = {
-  reminders: [
-    { text: 'Call John at 3 PM', urgent: true },
-    { text: 'Meeting with Sarah', urgent: false },
-    { text: 'Submit report', urgent: false },
-  ],
-  tasks: [
-    { text: 'Review applications', completed: false },
-    { text: 'Update student records', completed: false },
-    { text: 'Send emails', completed: true },
-  ],
-  birthdays: [
-    'Sarah Johnson - Mar 25',
-    'Mike Chen - Mar 28',
-    'Lisa Wong - Apr 2',
-  ],
-  onLeave: ['David Kim', 'Alex Rodriguez'],
-  anniversaries: ['John Smith - 2 years', 'Maria Garcia - 1 year'],
+const PanelList = ({ items, emptyText, renderItem }) => {
+  if (!items.length) {
+    return <p className="text-sm text-gray-500">{emptyText}</p>;
+  }
+
+  return <div className="space-y-2">{items.map(renderItem)}</div>;
 };
 
 export default function Panels() {
+  const [summary, setSummary] = useState(null);
+  const [notifications, setNotifications] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const loadPanels = useCallback(async () => {
+    setLoading(true);
+    setError('');
+
+    try {
+      const [summaryResponse, notificationsResponse] = await Promise.all([
+        leadAPI.getFollowUpSummary(),
+        notificationAPI.getNotifications({ limit: 5 }),
+      ]);
+
+      setSummary(summaryResponse.data?.data || null);
+      setNotifications(notificationsResponse.data?.data?.notifications || []);
+    } catch (requestError) {
+      console.error('Failed to load dashboard panels:', requestError);
+      setSummary(null);
+      setNotifications([]);
+      setError(
+        requestError?.response?.data?.message ||
+          requestError?.message ||
+          'Failed to load dashboard panels.'
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadPanels();
+  }, [loadPanels]);
+
+  if (loading) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+        {Array.from({ length: 5 }).map((_, index) => (
+          <Card key={index}>
+            <CardContent className="p-6">
+              <div className="animate-pulse space-y-3">
+                <div className="h-4 w-1/2 rounded bg-gray-200" />
+                <div className="h-3 rounded bg-gray-200" />
+                <div className="h-3 rounded bg-gray-200" />
+                <div className="h-3 w-3/4 rounded bg-gray-200" />
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex flex-col gap-3">
+            <p className="font-semibold text-gray-900">Dashboard panels unavailable</p>
+            <p className="text-sm text-gray-600">{error}</p>
+            <button
+              type="button"
+              onClick={loadPanels}
+              className="w-fit rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+            >
+              Retry
+            </button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const overdueFollowUps = summary?.overdueFollowUps || [];
+  const todayFollowUps = summary?.todayFollowUps || [];
+  const uncoveredLeads = summary?.leadsWithoutFutureFollowUp || [];
+  const contactRiskLeads = summary?.leadsOverdueForContact || [];
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
       <Card>
         <CardHeader>
           <CardTitle className="text-lg flex items-center">
             <Bell className="h-5 w-5 mr-2" />
-            Reminders
+            Recent Activity
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
-            {panelsData.reminders.map((reminder, index) => (
-              <div key={index} className="flex items-center space-x-2">
-                <Bell
-                  className={`h-4 w-4 ${reminder.urgent ? 'text-red-500' : 'text-yellow-500'}`}
-                />
-                <span className="text-sm">{reminder.text}</span>
+          <PanelList
+            items={notifications}
+            emptyText="No recent activity"
+            renderItem={(notification) => (
+              <div key={notification._id} className="flex items-start space-x-2">
+                <Bell className="mt-0.5 h-4 w-4 text-blue-500" />
+                <span className="text-sm">
+                  {notification.message || notification.title || 'Notification'}
+                </span>
               </div>
-            ))}
-          </div>
+            )}
+          />
         </CardContent>
       </Card>
 
@@ -51,27 +128,20 @@ export default function Panels() {
         <CardHeader>
           <CardTitle className="text-lg flex items-center">
             <CheckSquare className="h-5 w-5 mr-2" />
-            Tasks
+            Overdue Follow-ups
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
-            {panelsData.tasks.map((task, index) => (
-              <div key={index} className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  checked={task.completed}
-                  readOnly
-                  className="rounded"
-                />
-                <span
-                  className={`text-sm ${task.completed ? 'line-through text-gray-500' : ''}`}
-                >
-                  {task.text}
-                </span>
+          <PanelList
+            items={overdueFollowUps.slice(0, 3)}
+            emptyText="No overdue follow-ups"
+            renderItem={(item) => (
+              <div key={item._id} className="flex items-start space-x-2">
+                <AlertCircle className="mt-0.5 h-4 w-4 text-red-500" />
+                <span className="text-sm">{item.leadName}</span>
               </div>
-            ))}
-          </div>
+            )}
+          />
         </CardContent>
       </Card>
 
@@ -79,17 +149,19 @@ export default function Panels() {
         <CardHeader>
           <CardTitle className="text-lg flex items-center">
             <Calendar className="h-5 w-5 mr-2" />
-            Birthdays
+            Due Today
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
-            {panelsData.birthdays.map((birthday, index) => (
-              <div key={index} className="text-sm">
-                {birthday}
+          <PanelList
+            items={todayFollowUps.slice(0, 3)}
+            emptyText="No tasks for today"
+            renderItem={(item) => (
+              <div key={item._id} className="text-sm">
+                {item.leadName}
               </div>
-            ))}
-          </div>
+            )}
+          />
         </CardContent>
       </Card>
 
@@ -97,35 +169,39 @@ export default function Panels() {
         <CardHeader>
           <CardTitle className="text-lg flex items-center">
             <Users className="h-5 w-5 mr-2" />
-            On Leave
+            No Future Follow-up
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
-            {panelsData.onLeave.map((person, index) => (
-              <div key={index} className="text-sm">
-                {person}
+          <PanelList
+            items={uncoveredLeads.slice(0, 3)}
+            emptyText="No leads found"
+            renderItem={(lead) => (
+              <div key={lead._id} className="text-sm">
+                {lead.leadName}
               </div>
-            ))}
-          </div>
+            )}
+          />
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
           <CardTitle className="text-lg flex items-center">
-            <Calendar className="h-5 w-5 mr-2" />
-            Anniversaries
+            <AlertCircle className="h-5 w-5 mr-2" />
+            Contact Risk
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
-            {panelsData.anniversaries.map((anniversary, index) => (
-              <div key={index} className="text-sm">
-                {anniversary}
+          <PanelList
+            items={contactRiskLeads.slice(0, 3)}
+            emptyText="No data available"
+            renderItem={(lead) => (
+              <div key={lead._id} className="text-sm">
+                {lead.leadName}
               </div>
-            ))}
-          </div>
+            )}
+          />
         </CardContent>
       </Card>
     </div>

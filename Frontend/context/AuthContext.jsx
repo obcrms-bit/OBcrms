@@ -11,6 +11,7 @@ import {
 } from '@/src/services/session';
 import { getApiErrorMessage } from '@/src/services/apiUtils';
 import { closeChatSocket } from '@/src/services/socket';
+import { clearStoredWorkspaceSelection } from '@/src/services/workspace';
 
 const AuthContext = createContext();
 
@@ -80,6 +81,7 @@ export function AuthProvider({ children }) {
       } catch (error) {
         console.error('Failed to restore session', error);
         clearStoredSession();
+        clearStoredWorkspaceSelection();
         closeChatSocket();
 
         if (isMounted) {
@@ -97,6 +99,7 @@ export function AuthProvider({ children }) {
 
     const handleExpiredSession = () => {
       clearStoredSession();
+      clearStoredWorkspaceSelection();
       closeChatSocket();
       if (isMounted) {
         setUser(null);
@@ -160,6 +163,7 @@ export function AuthProvider({ children }) {
     setRefreshToken(null);
     setTenantId(null);
     clearStoredSession();
+    clearStoredWorkspaceSelection();
     closeChatSocket();
   };
 

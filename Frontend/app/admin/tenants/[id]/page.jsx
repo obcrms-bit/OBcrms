@@ -42,11 +42,11 @@ export default function SuperAdminTenantDetailPage() {
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'overview');
   const [selectedTemplateKey, setSelectedTemplateKey] = useState('');
   const [subscriptionForm, setSubscriptionForm] = useState({
-    plan: 'starter',
-    status: 'trial',
+    plan: '',
+    status: '',
     billingCycle: 'monthly',
-    userLimit: 10,
-    branchLimit: 2,
+    userLimit: 0,
+    branchLimit: 0,
   });
   const {
     tenantDetail: detail,
@@ -60,11 +60,11 @@ export default function SuperAdminTenantDetailPage() {
     try {
       const payload = await loadTenantDetail(id);
       setSubscriptionForm({
-        plan: payload?.subscription?.plan || 'starter',
-        status: payload?.subscription?.status || 'trial',
+        plan: payload?.subscription?.plan || '',
+        status: payload?.subscription?.status || '',
         billingCycle: payload?.subscription?.billingCycle || 'monthly',
-        userLimit: payload?.subscription?.userLimit || 10,
-        branchLimit: payload?.subscription?.branchLimit || 2,
+        userLimit: payload?.subscription?.userLimit || 0,
+        branchLimit: payload?.subscription?.branchLimit || 0,
       });
       setSelectedTemplateKey(payload?.templates?.[0]?.key || '');
     } catch (requestError) {
@@ -220,10 +220,10 @@ export default function SuperAdminTenantDetailPage() {
                       : 'overdue'
                 }
               >
-                {detail?.tenant?.status}
+                {detail?.tenant?.status || 'unknown'}
               </StatusPill>
-              <StatusPill tone="pending">{detail?.subscription?.plan}</StatusPill>
-              <StatusPill tone="converted">{detail?.subscription?.status}</StatusPill>
+              <StatusPill tone="pending">{detail?.subscription?.plan || 'Plan not set'}</StatusPill>
+              <StatusPill tone="converted">{detail?.subscription?.status || 'Status not set'}</StatusPill>
             </div>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -365,6 +365,7 @@ export default function SuperAdminTenantDetailPage() {
                   <label className="block space-y-2">
                     <span className="text-sm font-semibold text-slate-700">Plan</span>
                     <select className={inputClassName} value={subscriptionForm.plan} onChange={(event) => setSubscriptionForm((current) => ({ ...current, plan: event.target.value }))}>
+                      <option value="">Select plan</option>
                       {(detail?.billingPlans || []).map((plan) => (
                         <option key={plan.key} value={plan.key}>{plan.name}</option>
                       ))}
@@ -373,6 +374,7 @@ export default function SuperAdminTenantDetailPage() {
                   <label className="block space-y-2">
                     <span className="text-sm font-semibold text-slate-700">Status</span>
                     <select className={inputClassName} value={subscriptionForm.status} onChange={(event) => setSubscriptionForm((current) => ({ ...current, status: event.target.value }))}>
+                      <option value="">Select status</option>
                       <option value="trial">Trial</option>
                       <option value="active">Active</option>
                       <option value="past_due">Past Due</option>
@@ -389,7 +391,7 @@ export default function SuperAdminTenantDetailPage() {
                     <input type="number" min="1" className={inputClassName} value={subscriptionForm.branchLimit} onChange={(event) => setSubscriptionForm((current) => ({ ...current, branchLimit: event.target.value }))} />
                   </label>
                 </div>
-                <button type="submit" disabled={saving} className="rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60">
+                <button type="submit" disabled={saving || !subscriptionForm.plan || !subscriptionForm.status} className="rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60">
                   {saving ? 'Saving...' : 'Save Subscription'}
                 </button>
               </form>
