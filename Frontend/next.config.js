@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 const DEFAULT_DEPLOYED_API_URL = 'https://obcrms-backend.onrender.com';
+const LEGACY_BACKEND_HOSTS = new Set([
+  'trust-education-crm-api.onrender.com',
+]);
 const trimTrailingSlash = (value = '') => String(value).replace(/\/+$/, '');
 const normalizeBackendApiUrl = (value = '') => {
   const trimmed = trimTrailingSlash(value);
@@ -10,6 +13,9 @@ const normalizeBackendApiUrl = (value = '') => {
 
   try {
     const parsed = new URL(trimmed);
+    if (LEGACY_BACKEND_HOSTS.has(parsed.hostname)) {
+      parsed.hostname = new URL(DEFAULT_DEPLOYED_API_URL).hostname;
+    }
     const normalizedPath = trimTrailingSlash(parsed.pathname || '');
 
     if (!normalizedPath) {
