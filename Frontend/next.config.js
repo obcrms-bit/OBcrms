@@ -1,11 +1,24 @@
 /** @type {import('next').NextConfig} */
+const backendApiUrl =
+  process.env.REACT_APP_API_URL || process.env.NEXT_PUBLIC_API_URL || '';
+
 const nextConfig = {
   reactStrictMode: true,
+  env: {
+    REACT_APP_API_URL: backendApiUrl,
+    NEXT_PUBLIC_API_URL: backendApiUrl,
+    NEXT_PUBLIC_APP_NAME:
+      process.env.NEXT_PUBLIC_APP_NAME || 'Trust Education CRM',
+  },
   async rewrites() {
+    if (!backendApiUrl) {
+      return [];
+    }
+
     return [
       {
         source: '/api/:path*',
-        destination: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/:path*`,
+        destination: `${backendApiUrl.replace(/\/+$/, '')}/:path*`,
       },
     ];
   },

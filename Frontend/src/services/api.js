@@ -1,46 +1,47 @@
 import axios from 'axios';
+import {
+  clearStoredSession,
+  emitAuthExpired,
+  getStoredToken,
+} from './session';
+import { getApiBaseUrl } from './runtimeConfig';
 
-// Support both NEXT_PUBLIC_API_URL (Next.js) and REACT_APP_API_URL (fallback for CRA)
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  process.env.REACT_APP_API_URL ||
-  'http://localhost:5000/api';
-
-// Create axios instance with base URL
 const api = axios.create({
-  baseURL: API_URL,
-  headers: { 'Content-Type': 'application/json' },
+  baseURL: getApiBaseUrl(),
+  headers: {
+    'Content-Type': 'application/json',
+  },
   timeout: 20000,
 });
 
-// Request interceptor: Attach JWT token to every request
 api.interceptors.request.use(
   (config) => {
-    // Only access localStorage on client side
-    if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('token');
-      if (token) config.headers.Authorization = `Bearer ${token}`;
+    const nextConfig = { ...config };
+    const token = getStoredToken();
+
+    if (token) {
+      nextConfig.headers = nextConfig.headers || {};
+      nextConfig.headers.Authorization = `Bearer ${token}`;
     }
-    return config;
+
+    return nextConfig;
   },
   (error) => Promise.reject(error)
 );
 
-// Response interceptor: Handle 401 globally
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      // Only access window/localStorage on client side
-      if (typeof window !== 'undefined') {
-        const currentPath = window.location.pathname;
-        if (currentPath !== '/login') {
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
-          window.location.href = '/login';
-        }
-      }
+    if (
+      error?.response?.status === 401 &&
+      !error?.config?.skipAuthHandling
+    ) {
+      clearStoredSession();
+      emitAuthExpired({
+        reason: error.response?.data?.message || 'Your session has expired.',
+      });
     }
+
     return Promise.reject(error);
   }
 );
@@ -57,7 +58,12 @@ export const authAPI = {
     }),
   register: (name, email, password, role = 'counselor') =>
     api.post('/auth/register', { name, email, password, role }),
-  login: (email, password) => api.post('/auth/login', { email, password }),
+  login: (email, password) =>
+    api.post(
+      '/auth/login',
+      { email, password },
+      { skipAuthHandling: true }
+    ),
   getMe: () => api.get('/auth/me'),
   getUsers: (role) => api.get('/auth/users', { params: role ? { role } : {} }),
 };
@@ -71,10 +77,16 @@ export const leadAPI = {
   deleteLead: (id) => api.delete(`/leads/${id}`),
   getPipeline: () => api.get('/leads/pipeline'),
   getDueFollowUps: () => api.get('/leads/followups/due'),
+  getFollowUps: (params = {}) => api.get('/leads/followups', { params }),
+  getFollowUpSummary: () => api.get('/leads/followups/summary'),
+  triggerReminderSweep: () => api.post('/leads/followups/reminders/run'),
   assignCounsellor: (id, counsellorId, reason) =>
     api.post(`/leads/${id}/assign`, { counsellorId, reason }),
   updateStatus: (id, status) => api.post(`/leads/${id}/status`, { status }),
   scheduleFollowUp: (id, data) => api.post(`/leads/${id}/followup`, data),
+  getLeadFollowUps: (id) => api.get(`/leads/${id}/followups`),
+  completeFollowUp: (id, followUpId, data) =>
+    api.post(`/leads/${id}/followups/${followUpId}/complete`, data),
   addNote: (id, content) => api.post(`/leads/${id}/note`, { content }),
   convertToStudent: (id) => api.post(`/leads/${id}/convert`),
   recalculateScore: (id) => api.post(`/leads/${id}/score`),
@@ -164,6 +176,7 @@ export const studentAPI = {
   deleteStudent: (id) => api.delete(`/students/${id}`),
   assignCounselor: (id, counselorId) =>
     api.put(`/students/${id}/assign-counselor`, { counselorId }),
+  updateStatus: (id, status) => api.patch(`/students/${id}/status`, { status }),
 };
 
 // ==================== APPLICANTS ====================
@@ -188,12 +201,34 @@ export const dashboardAPI = {
   getDashboardStats: () => api.get('/dashboard/stats'),
 };
 
+// ==================== CHAT ====================
+export const chatAPI = {
+  getUsers: (search = '') =>
+    api.get('/chat/users', { params: search ? { search } : {} }),
+  getConversations: (search = '') =>
+    api.get('/chat/conversations', { params: search ? { search } : {} }),
+  getMessages: (conversationId, params = {}) =>
+    api.get(`/chat/conversations/${conversationId}/messages`, { params }),
+  createConversation: (participantId) =>
+    api.post('/chat/conversations', { participantId }),
+  sendMessage: (payload) => api.post('/chat/messages', payload),
+  markSeen: (conversationId) =>
+    api.post(`/chat/conversations/${conversationId}/seen`),
+  markDelivered: (conversationId) =>
+    api.post(`/chat/conversations/${conversationId}/delivered`),
+  search: (query) => api.get('/chat/search', { params: { q: query } }),
+};
+
 // ==================== COMPANY ====================
 export const companyAPI = {
   getProfile: () => api.get('/company/profile'),
   updateProfile: (data) => api.patch('/company/profile', data),
   getBranding: () => api.get('/company/profile'),
   updateSettings: (data) => api.patch('/company/profile', data),
+};
+
+export const branchAPI = {
+  getBranches: () => api.get('/branches'),
 };
 
 export default api;

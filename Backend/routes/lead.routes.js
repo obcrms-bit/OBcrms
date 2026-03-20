@@ -9,6 +9,9 @@ router.use(protect);
 // Pipeline (must be before /:id routes)
 router.get('/pipeline', ctrl.getPipeline);
 router.get('/followups/due', ctrl.getDueFollowUps);
+router.get('/followups', ctrl.getFollowUps);
+router.get('/followups/summary', ctrl.getFollowUpDashboardSummary);
+router.post('/followups/reminders/run', ctrl.triggerReminderSweep);
 
 // CRUD
 router.get('/', ctrl.getLeads);
@@ -21,6 +24,8 @@ router.delete('/:id', ctrl.deleteLead);
 router.post('/:id/assign', ctrl.assignCounsellor);
 router.post('/:id/status', ctrl.updateStatus);
 router.post('/:id/followup', ctrl.scheduleFollowUp);
+router.get('/:id/followups', ctrl.getLeadFollowUps);
+router.post('/:id/followups/:followUpId/complete', ctrl.completeFollowUp);
 router.post('/:id/note', ctrl.addNote);
 router.post('/:id/convert', ctrl.convertToStudent);
 router.post('/:id/score', ctrl.recalculateScore);

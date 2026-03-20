@@ -2,21 +2,26 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
 import { authAPI } from '@/src/services/api';
+import {
+  AUTH_EXPIRED_EVENT,
+  clearStoredSession,
+  getStoredToken,
+  getStoredUser,
+  setStoredSession,
+} from '@/src/services/session';
+import { closeChatSocket } from '@/src/services/socket';
 
 const AuthContext = createContext();
 
-const readStoredUser = () => {
-  if (typeof window === 'undefined') {
+const normalizeUser = (payload) => {
+  if (!payload) {
     return null;
   }
 
-  try {
-    const rawUser = localStorage.getItem('user');
-    return rawUser ? JSON.parse(rawUser) : null;
-  } catch (error) {
-    console.error('Failed to parse stored user', error);
-    return null;
-  }
+  return {
+    ...payload,
+    id: payload.id || payload._id,
+  };
 };
 
 export function AuthProvider({ children }) {
@@ -25,30 +30,78 @@ export function AuthProvider({ children }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
+    let isMounted = true;
 
-    setUser(readStoredUser());
-    setToken(localStorage.getItem('token'));
-    setIsLoading(false);
+    const syncSession = async () => {
+      const storedToken = getStoredToken();
+      const storedUser = getStoredUser();
+
+      if (!storedToken) {
+        if (isMounted) {
+          setUser(null);
+          setToken(null);
+          setIsLoading(false);
+        }
+        return;
+      }
+
+      if (isMounted) {
+        setToken(storedToken);
+        setUser(normalizeUser(storedUser));
+      }
+
+      try {
+        const response = await authAPI.getMe();
+        const nextUser = normalizeUser(response.data?.data);
+
+        if (nextUser) {
+          setStoredSession({ token: storedToken, user: nextUser });
+        }
+
+        if (isMounted) {
+          setUser(nextUser);
+        }
+      } catch (error) {
+        console.error('Failed to restore session', error);
+        clearStoredSession();
+        closeChatSocket();
+
+        if (isMounted) {
+          setUser(null);
+          setToken(null);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    const handleExpiredSession = () => {
+      clearStoredSession();
+      closeChatSocket();
+      if (isMounted) {
+        setUser(null);
+        setToken(null);
+      }
+    };
+
+    window.addEventListener(AUTH_EXPIRED_EVENT, handleExpiredSession);
+    syncSession();
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener(AUTH_EXPIRED_EVENT, handleExpiredSession);
+    };
   }, []);
 
   const persistAuth = (payload) => {
-    const nextUser = payload?.user ?? payload ?? null;
+    const nextUser = normalizeUser(payload?.user ?? payload ?? null);
     const nextToken = payload?.token ?? payload?.authToken ?? null;
 
     setUser(nextUser);
     setToken(nextToken);
-
-    if (typeof window !== 'undefined') {
-      if (nextUser) {
-        localStorage.setItem('user', JSON.stringify(nextUser));
-      }
-      if (nextToken) {
-        localStorage.setItem('token', nextToken);
-      }
-    }
+    setStoredSession({ token: nextToken, user: nextUser });
   };
 
   const login = async (payloadOrEmail, password) => {
@@ -74,11 +127,8 @@ export function AuthProvider({ children }) {
   const logout = () => {
     setUser(null);
     setToken(null);
-
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-    }
+    clearStoredSession();
+    closeChatSocket();
   };
 
   const value = {

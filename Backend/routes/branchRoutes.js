@@ -5,7 +5,7 @@ const { protect, restrict } = require('../middleware/AuthMiddleware');
 
 router.use(protect);
 
-router.get('/', restrict('admin', 'manager'), branchController.getBranches);
+router.get('/', branchController.getBranches);
 router.post('/', restrict('admin'), branchController.createBranch);
 router.put('/:id', restrict('admin'), branchController.updateBranch);
 router.delete('/:id', restrict('admin'), branchController.deleteBranch);

@@ -646,13 +646,14 @@ exports.runRiskAssessment = asyncHandler(async (req, res) => {
 
 exports.getVisaDashboard = asyncHandler(async (req, res) => {
   const companyId = req.companyId;
+  const companyObjectId = new (require('mongoose').Types.ObjectId)(companyId);
 
   const [totalApplications, byCountry, byStage, approvedCount, rejectedCount] = await Promise.all([
     VisaApplication.countDocuments({ companyId }),
     VisaApplication.aggregate([
       {
         $match: {
-          companyId: require('mongoose').Types.ObjectId.createFromHexString ? null : companyId,
+          companyId: companyObjectId,
         },
       },
       {
@@ -664,7 +665,7 @@ exports.getVisaDashboard = asyncHandler(async (req, res) => {
       },
     ]).catch(() => []),
     VisaApplication.aggregate([
-      { $match: {} },
+      { $match: { companyId: companyObjectId } },
       { $group: { _id: '$currentStage', count: { $sum: 1 } } },
     ]).catch(() => []),
     VisaApplication.countDocuments({ companyId, currentStage: 'approved' }),

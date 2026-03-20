@@ -138,6 +138,10 @@ const agentRoutes = require('./routes/agent.routes');
 const visaRoutes = require('./routes/visa.routes');
 const chatRoutes = require('./routes/chat.routes');
 const { initSocket } = require('./sockets/chatSocket');
+const {
+  startReminderScheduler,
+  stopReminderSchedulers,
+} = require('./services/followUpReminder.service');
 
 // ==================== 10. MOUNT ROUTES ====================
 app.use('/api/auth', authRoutes);
@@ -195,11 +199,14 @@ mongoose
     });
 
     const io = initSocket(server);
+    const stopReminderScheduler = startReminderScheduler();
 
     // Graceful shutdown
     const shutdown = (signal) => {
       console.log(`\n${signal} received. Closing server gracefully...`);
       io.close();
+      stopReminderScheduler();
+      stopReminderSchedulers();
       server.close(() => {
         console.log('HTTP server closed.');
         mongoose.connection.close(false, () => {

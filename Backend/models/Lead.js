@@ -1,6 +1,63 @@
 const mongoose = require('mongoose');
 
-// ─── Activity Sub-Schema ─────────────────────────────────────────────────────
+const PIPELINE_STATUSES = [
+  'new',
+  'contacted',
+  'qualified',
+  'counselling_scheduled',
+  'counselling_done',
+  'application_started',
+  'documents_pending',
+  'application_submitted',
+  'offer_received',
+  'visa_applied',
+  'enrolled',
+  'lost',
+];
+
+const FOLLOW_UP_METHODS = [
+  'call',
+  'whatsapp',
+  'email',
+  'in_person',
+  'meeting',
+  'sms',
+  'other',
+];
+
+const FOLLOW_UP_OUTCOMES = [
+  'next_followup_needed',
+  'converted_to_student',
+  'closed_not_interested',
+  'no_response',
+  'other',
+];
+
+const mapPipelineStatusToStage = (status) => {
+  switch (status) {
+    case 'new':
+      return 1;
+    case 'contacted':
+    case 'qualified':
+      return 2;
+    case 'counselling_scheduled':
+    case 'counselling_done':
+      return 3;
+    case 'application_started':
+    case 'documents_pending':
+    case 'application_submitted':
+    case 'offer_received':
+      return 4;
+    case 'visa_applied':
+      return 5;
+    case 'enrolled':
+    case 'lost':
+      return 6;
+    default:
+      return 1;
+  }
+};
+
 const activitySchema = new mongoose.Schema(
   {
     type: {
@@ -11,6 +68,11 @@ const activitySchema = new mongoose.Schema(
         'status_changed',
         'assignment_changed',
         'followup_scheduled',
+        'followup_completed',
+        'followup_rescheduled',
+        'followup_marked_overdue',
+        'reminder_sent',
+        'reminder_failed',
         'note_added',
         'converted_to_student',
         'communication_logged',
@@ -26,13 +88,68 @@ const activitySchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// ─── Follow-up Sub-Schema ─────────────────────────────────────────────────────
+const noteSchema = new mongoose.Schema(
+  {
+    content: { type: String, required: true, trim: true },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    createdAt: { type: Date, default: Date.now },
+  },
+  { _id: true }
+);
+
+const qualificationSchema = new mongoose.Schema(
+  {
+    country: { type: String, trim: true },
+    institution: { type: String, trim: true },
+    degree: { type: String, trim: true },
+    course: { type: String, trim: true },
+    gradeType: { type: String, trim: true },
+    point: { type: String, trim: true },
+    percentageValue: { type: String, trim: true },
+    universityTitle: { type: String, trim: true },
+    level: { type: String, trim: true },
+    passedYear: { type: String, trim: true },
+    startedAt: { type: Date },
+    completedAt: { type: Date },
+    resultDate: { type: Date },
+  },
+  { _id: true }
+);
+
+const reminderHistorySchema = new mongoose.Schema(
+  {
+    sentAt: { type: Date, default: Date.now },
+    status: { type: String, enum: ['sent', 'failed', 'skipped'], default: 'sent' },
+    message: { type: String, trim: true },
+    error: { type: String, trim: true },
+  },
+  { _id: false }
+);
+
+const reminderMetaSchema = new mongoose.Schema(
+  {
+    isOverdue: { type: Boolean, default: false },
+    lastReminderSentAt: { type: Date },
+    reminderCount: { type: Number, default: 0 },
+    reminderStatus: {
+      type: String,
+      enum: ['pending', 'sent', 'failed', 'skipped'],
+      default: 'pending',
+    },
+    nextReminderAt: { type: Date },
+    lastError: { type: String, trim: true },
+    history: { type: [reminderHistorySchema], default: [] },
+  },
+  { _id: false }
+);
+
 const followUpSchema = new mongoose.Schema(
   {
     scheduledAt: { type: Date, required: true },
+    scheduledBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     type: {
       type: String,
-      enum: ['call', 'email', 'whatsapp', 'meeting', 'sms'],
+      enum: FOLLOW_UP_METHODS,
       default: 'call',
     },
     notes: { type: String, trim: true },
@@ -43,14 +160,27 @@ const followUpSchema = new mongoose.Schema(
       default: 'pending',
     },
     completedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    outcomeType: {
+      type: String,
+      enum: FOLLOW_UP_OUTCOMES,
+    },
+    completionNotes: { type: String, trim: true },
+    completionMethod: {
+      type: String,
+      enum: FOLLOW_UP_METHODS,
+    },
+    followUpTime: { type: String, trim: true },
+    counsellorName: { type: String, trim: true },
+    nextFollowUpDate: { type: Date },
+    convertedStudentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Student' },
+    convertedAt: { type: Date },
+    reminderMeta: { type: reminderMetaSchema, default: () => ({}) },
   },
   { timestamps: true }
 );
 
-// ─── Main Lead Schema ─────────────────────────────────────────────────────────
 const leadSchema = new mongoose.Schema(
   {
-    // Tenant / Branch fields
     companyId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Company',
@@ -59,14 +189,28 @@ const leadSchema = new mongoose.Schema(
     },
     branchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Branch', index: true },
 
-    // Basic contact info
     firstName: { type: String, required: [true, 'First name is required'], trim: true },
-    lastName: { type: String, required: [true, 'Last name is required'], trim: true },
+    lastName: { type: String, trim: true, default: '' },
+    name: { type: String, trim: true },
     email: { type: String, lowercase: true, trim: true },
-    phone: { type: String, required: [true, 'Phone number is required'], trim: true },
+    phone: { type: String, trim: true },
+    mobile: { type: String, trim: true },
     whatsappNumber: { type: String, trim: true },
+    fullAddress: { type: String, trim: true },
+    dob: { type: Date },
+    gender: {
+      type: String,
+      enum: ['male', 'female', 'other', 'prefer_not_to_say'],
+    },
+    guardianName: { type: String, trim: true },
+    guardianContact: { type: String, trim: true },
+    maritalStatus: {
+      type: String,
+      enum: ['single', 'married', 'divorced', 'widowed', 'other'],
+    },
+    appliedCountryBefore: { type: Boolean, default: false },
+    howDidYouKnowUs: { type: String, trim: true },
 
-    // Lead metadata
     source: {
       type: String,
       enum: [
@@ -82,54 +226,32 @@ const leadSchema = new mongoose.Schema(
       ],
       default: 'website',
     },
-    status: {
-      type: String,
-      enum: [
-        'new',
-        'contacted',
-        'qualified',
-        'counselling_scheduled',
-        'counselling_done',
-        'application_started',
-        'documents_pending',
-        'application_submitted',
-        'offer_received',
-        'visa_applied',
-        'enrolled',
-        'lost',
-      ],
-      default: 'new',
-      index: true,
-    },
-    tags: [{ type: String, trim: true }],
+    campaign: { type: String, trim: true },
+    branchName: { type: String, trim: true },
+    stream: { type: String, trim: true },
+    interestedFor: { type: String, trim: true },
+    courseLevel: { type: String, trim: true },
+    preferredLocation: { type: String, trim: true },
+    interestedCourse: { type: String, trim: true },
 
-    // Study preferences
-    preferredCountries: [{ type: String }],
-    preferredStudyLevel: {
-      type: String,
-      enum: [
-        'certificate',
-        'diploma',
-        'bachelor',
-        'postgraduate',
-        'phd',
-        'english_course',
-        'other',
-      ],
-    },
-    preferredIntake: { type: String }, // e.g. "September 2025"
+    preferredCountries: [{ type: String, trim: true }],
+    preferredStudyLevel: { type: String, trim: true },
+    preferredIntake: { type: String, trim: true },
     budget: { type: Number, min: 0 },
+    preparationClass: { type: String, trim: true },
+    overallScore: { type: String, trim: true },
+    workExperience: { type: String, trim: true },
 
-    // Academic background
+    qualifications: { type: [qualificationSchema], default: [] },
+
     education: {
-      lastDegree: { type: String },
-      institution: { type: String },
+      lastDegree: { type: String, trim: true },
+      institution: { type: String, trim: true },
       percentage: { type: Number },
       passingYear: { type: Number },
       gpa: { type: Number },
     },
 
-    // English test
     englishTest: {
       type: {
         type: String,
@@ -140,56 +262,60 @@ const leadSchema = new mongoose.Schema(
       dateTaken: { type: Date },
     },
 
-    // Assignment
+    status: {
+      type: String,
+      enum: PIPELINE_STATUSES,
+      default: 'new',
+      index: true,
+    },
+    pipelineStage: {
+      type: String,
+      enum: PIPELINE_STATUSES,
+      default: 'new',
+      index: true,
+    },
+    stage: { type: Number, min: 1, max: 6, default: 1 },
+    recordType: {
+      type: String,
+      enum: ['lead', 'student', 'applicant'],
+      default: 'lead',
+      index: true,
+    },
+    tags: [{ type: String, trim: true }],
+
     assignedCounsellor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
+    assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     assignmentHistory: [
       {
         counsellor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
         assignedAt: { type: Date, default: Date.now },
         assignedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-        reason: { type: String },
+        reason: { type: String, trim: true },
       },
     ],
 
-    // Scoring
     leadScore: { type: Number, default: 0, min: 0, max: 100, index: true },
     leadCategory: { type: String, enum: ['hot', 'warm', 'cold'], default: 'cold' },
 
-    // Follow-ups
-    followUps: [followUpSchema],
+    followUps: { type: [followUpSchema], default: [] },
     nextFollowUp: { type: Date, index: true },
+    lastContactedAt: { type: Date },
 
-    // Notes
-    notes: [
-      {
-        content: { type: String, required: true },
-        createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-        createdAt: { type: Date, default: Date.now },
-      },
-    ],
+    notes: { type: [noteSchema], default: [] },
+    activities: { type: [activitySchema], default: [] },
 
-    // Activities / Timeline
-    activities: [activitySchema],
-
-    // Conversion
     convertedToStudent: { type: Boolean, default: false },
     studentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Student' },
     convertedAt: { type: Date },
 
-    // Soft delete
     deletedAt: { type: Date, default: null },
 
-    // Legacy fields (backward compat)
-    name: { type: String }, // computed virtual below
     address: {
-      city: { type: String },
-      country: { type: String },
+      city: { type: String, trim: true },
+      country: { type: String, trim: true },
     },
-    interestedCourse: { type: String },
-    interestedCountry: { type: String },
+    interestedCountry: { type: String, trim: true },
     priority: { type: String, enum: ['low', 'medium', 'high', 'urgent'], default: 'medium' },
-    assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // alias for assignedCounsellor
-    lastContactedAt: { type: Date },
     aiScore: { type: Number, min: 0, max: 100, default: 0 },
     metadata: { type: mongoose.Schema.Types.Mixed },
   },
@@ -200,32 +326,92 @@ const leadSchema = new mongoose.Schema(
   }
 );
 
-// ─── Virtuals ─────────────────────────────────────────────────────────────────
-leadSchema.virtual('fullName').get(function () {
+leadSchema.virtual('fullName').get(function fullNameGetter() {
+  if (this.name) {
+    return this.name;
+  }
   return `${this.firstName || ''} ${this.lastName || ''}`.trim();
 });
 
-// ─── Pre-save: sync legacy name field ────────────────────────────────────────
-leadSchema.pre('save', function (next) {
-  if (this.firstName || this.lastName) {
-    this.name = `${this.firstName || ''} ${this.lastName || ''}`.trim();
+leadSchema.virtual('notesHistory').get(function notesHistoryGetter() {
+  return this.notes || [];
+});
+
+leadSchema.virtual('activityLogs').get(function activityLogsGetter() {
+  return this.activities || [];
+});
+
+leadSchema.pre('save', function syncLegacyFields(next) {
+  if (this.name && (!this.firstName || !this.lastName)) {
+    const parts = String(this.name).trim().split(/\s+/);
+    this.firstName = parts.shift() || this.firstName || 'Lead';
+    this.lastName = parts.join(' ') || this.lastName || '';
   }
+
+  this.name = `${this.firstName || ''} ${this.lastName || ''}`.trim();
+
+  if (this.mobile && !this.phone) {
+    this.phone = this.mobile;
+  }
+  if (this.phone && !this.mobile) {
+    this.mobile = this.phone;
+  }
+
   if (this.assignedCounsellor && !this.assignedTo) {
     this.assignedTo = this.assignedCounsellor;
   }
+  if (this.assignedTo && !this.assignedCounsellor) {
+    this.assignedCounsellor = this.assignedTo;
+  }
+
+  if (this.courseLevel && !this.preferredStudyLevel) {
+    this.preferredStudyLevel = this.courseLevel;
+  }
+  if (this.preferredStudyLevel && !this.courseLevel) {
+    this.courseLevel = this.preferredStudyLevel;
+  }
+
+  if (this.interestedCountry && (!this.preferredCountries || !this.preferredCountries.length)) {
+    this.preferredCountries = [this.interestedCountry];
+  }
+  if (this.preferredCountries?.length && !this.interestedCountry) {
+    this.interestedCountry = this.preferredCountries[0];
+  }
+
+  this.pipelineStage = this.status || this.pipelineStage || 'new';
+  this.status = this.pipelineStage;
+  this.stage = mapPipelineStatusToStage(this.status);
+
+  const nextPendingFollowUp = (this.followUps || [])
+    .filter((item) => ['pending', 'overdue'].includes(item.status))
+    .sort((left, right) => new Date(left.scheduledAt) - new Date(right.scheduledAt))[0];
+
+  this.nextFollowUp = nextPendingFollowUp ? nextPendingFollowUp.scheduledAt : null;
+
   next();
 });
 
-// ─── Indexes ──────────────────────────────────────────────────────────────────
 leadSchema.index(
   { companyId: 1, phone: 1 },
-  { unique: true, partialFilterExpression: { deletedAt: null } }
+  { unique: true, partialFilterExpression: { deletedAt: null, phone: { $type: 'string' } } }
 );
+leadSchema.index({ companyId: 1, email: 1 });
 leadSchema.index({ companyId: 1, status: 1 });
+leadSchema.index({ companyId: 1, pipelineStage: 1 });
+leadSchema.index({ companyId: 1, stage: 1 });
 leadSchema.index({ companyId: 1, leadScore: -1 });
 leadSchema.index({ companyId: 1, nextFollowUp: 1 });
 leadSchema.index({ companyId: 1, assignedCounsellor: 1 });
 leadSchema.index({ companyId: 1, createdAt: -1 });
-leadSchema.index({ firstName: 'text', lastName: 'text', email: 'text', phone: 'text' });
+leadSchema.index({
+  firstName: 'text',
+  lastName: 'text',
+  name: 'text',
+  email: 'text',
+  phone: 'text',
+  mobile: 'text',
+  interestedCourse: 'text',
+  branchName: 'text',
+});
 
 module.exports = mongoose.model('Lead', leadSchema);

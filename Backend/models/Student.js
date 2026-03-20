@@ -8,6 +8,12 @@ const studentSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    branchId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Branch',
+      index: true,
+    },
+    branchName: { type: String, trim: true },
     leadId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Lead',
@@ -17,6 +23,8 @@ const studentSchema = new mongoose.Schema(
       required: [true, 'Full name is required'],
       trim: true,
     },
+    firstName: { type: String, trim: true },
+    lastName: { type: String, trim: true },
     email: {
       type: String,
       lowercase: true,
@@ -27,15 +35,24 @@ const studentSchema = new mongoose.Schema(
       required: [true, 'Phone number is required'],
       trim: true,
     },
+    mobile: { type: String, trim: true },
     passportNumber: String,
     dateOfBirth: Date,
+    gender: { type: String, trim: true },
+    source: { type: String, trim: true },
+    stream: { type: String, trim: true },
+    interestedCourse: { type: String, trim: true },
+    preferredLocation: { type: String, trim: true },
     address: {
       street: String,
       city: String,
       state: String,
       country: String,
       zipCode: String,
+      fullAddress: String,
     },
+    guardianName: { type: String, trim: true },
+    guardianContact: { type: String, trim: true },
     educationHistory: [
       {
         institution: String,
@@ -43,6 +60,11 @@ const studentSchema = new mongoose.Schema(
         major: String,
         percentage: Number,
         passingYear: Number,
+        level: String,
+        country: String,
+        universityTitle: String,
+        point: String,
+        percentageValue: String,
       },
     ],
     testScores: {
@@ -96,6 +118,7 @@ const studentSchema = new mongoose.Schema(
         createdAt: { type: Date, default: Date.now },
       },
     ],
+    leadSnapshot: mongoose.Schema.Types.Mixed,
     metadata: mongoose.Schema.Types.Mixed,
     deletedAt: { type: Date, default: null },
   },
@@ -104,7 +127,23 @@ const studentSchema = new mongoose.Schema(
   }
 );
 
-studentSchema.index({ companyId: 1, email: 1 }, { unique: true });
+studentSchema.pre('save', function syncStudentAliases(next) {
+  if (!this.mobile && this.phone) {
+    this.mobile = this.phone;
+  }
+  if (!this.phone && this.mobile) {
+    this.phone = this.mobile;
+  }
+  if (!this.fullName) {
+    this.fullName = `${this.firstName || ''} ${this.lastName || ''}`.trim();
+  }
+  next();
+});
+
+studentSchema.index(
+  { companyId: 1, email: 1 },
+  { unique: true, partialFilterExpression: { email: { $type: 'string' } } }
+);
 studentSchema.index({ companyId: 1, phone: 1 }, { unique: true });
 
 module.exports = mongoose.model('Student', studentSchema);

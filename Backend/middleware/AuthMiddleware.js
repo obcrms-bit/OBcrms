@@ -49,7 +49,15 @@ exports.restrict = (...roles) => {
   return (req, res, next) => {
     const userRole = req.user?.role?.toLowerCase();
     const allowedRoles = roles.map((r) => r.toLowerCase());
-    if (!req.user || !allowedRoles.includes(userRole)) {
+    if (!req.user) {
+      return sendError(res, 403, 'Forbidden: insufficient role');
+    }
+
+    if (userRole === 'super_admin') {
+      return next();
+    }
+
+    if (!allowedRoles.includes(userRole)) {
       return sendError(res, 403, 'Forbidden: insufficient role');
     }
     next();
