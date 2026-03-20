@@ -13,9 +13,18 @@ const invoiceSchema = new mongoose.Schema(
       ref: 'Student',
       required: true,
     },
+    branchId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Branch',
+      index: true,
+    },
     applicantId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Applicant',
+    },
+    createdByUser: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
     },
     invoiceNumber: {
       type: String,
@@ -58,5 +67,7 @@ const invoiceSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+invoiceSchema.index({ companyId: 1, branchId: 1, status: 1 });
 
 module.exports = mongoose.model('Invoice', invoiceSchema);

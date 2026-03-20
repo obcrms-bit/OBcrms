@@ -5,6 +5,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { LockKeyhole, Mail, ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { publicAPI } from '@/src/services/api';
+import { DEFAULT_BRANDING, normalizeBranding } from '@/src/services/branding';
+import { getApiBaseUrl } from '@/src/services/runtimeConfig';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -13,12 +16,53 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [branding, setBranding] = useState(DEFAULT_BRANDING);
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
       router.replace('/dashboard');
     }
   }, [isAuthenticated, isLoading, router]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadBranding = async () => {
+      if (typeof window === 'undefined') {
+        setBranding(DEFAULT_BRANDING);
+        return;
+      }
+
+      const params = new URLSearchParams(window.location.search);
+      const companyId = params.get('companyId') || params.get('tenant');
+      const branchId = params.get('branchId');
+
+      if (!companyId) {
+        setBranding(DEFAULT_BRANDING);
+        return;
+      }
+
+      try {
+        const response = await publicAPI.getBranding(
+          branchId ? { companyId, branchId } : { companyId }
+        );
+        if (!active) {
+          return;
+        }
+        setBranding(normalizeBranding(response.data?.data?.branding || DEFAULT_BRANDING));
+      } catch (requestError) {
+        if (active) {
+          setBranding(DEFAULT_BRANDING);
+        }
+      }
+    };
+
+    loadBranding();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -33,9 +77,13 @@ export default function LoginPage() {
 
       router.replace('/dashboard');
     } catch (requestError) {
+      const isNetworkFailure =
+        requestError?.message === 'Network Error' || !requestError?.response;
       setError(
         requestError?.response?.data?.message ||
-          requestError?.message ||
+          (isNetworkFailure
+            ? `Unable to reach the backend at ${getApiBaseUrl()}. If the Render service was sleeping, wait a moment and try again.`
+            : requestError?.message) ||
           'Unable to sign in with those credentials.'
       );
     } finally {
@@ -47,18 +95,22 @@ export default function LoginPage() {
     <div className="min-h-screen bg-[linear-gradient(135deg,#f8fafc_0%,#ecfeff_50%,#eef2ff_100%)] px-4 py-10">
       <div className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-6xl items-center justify-center">
         <div className="grid w-full max-w-5xl overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_30px_80px_rgba(15,23,42,0.14)] lg:grid-cols-[1.1fr_0.9fr]">
-          <section className="hidden bg-[radial-gradient(circle_at_top_left,rgba(20,184,166,0.24),transparent_38%),linear-gradient(160deg,#0f172a_0%,#0f766e_45%,#0f172a_100%)] p-10 text-white lg:flex lg:flex-col lg:justify-between">
+          <section
+            className="hidden p-10 text-white lg:flex lg:flex-col lg:justify-between"
+            style={{
+              background: `radial-gradient(circle at top left, ${branding.accentColor}3d, transparent 38%), linear-gradient(160deg, ${branding.secondaryColor} 0%, ${branding.primaryColor} 45%, ${branding.secondaryColor} 100%)`,
+            }}
+          >
             <div>
               <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm font-medium backdrop-blur">
                 <ShieldCheck size={16} />
                 Internal Access Portal
               </span>
               <h1 className="mt-8 text-4xl font-semibold leading-tight">
-                Sign in to the Trust Education workspace.
+                {branding.loginHeading}
               </h1>
               <p className="mt-4 max-w-md text-sm leading-7 text-cyan-50/85">
-                Use your staff account to access the CRM, dashboards, and all
-                company-scoped operational tools.
+                {branding.loginSubheading}
               </p>
             </div>
 
@@ -76,7 +128,7 @@ export default function LoginPage() {
             <div className="mx-auto max-w-md">
               <div className="mb-8">
                 <p className="text-sm font-medium uppercase tracking-[0.2em] text-teal-700">
-                  Trust Education CRM
+                  {branding.companyName}
                 </p>
                 <h2 className="mt-3 text-3xl font-semibold text-slate-900">
                   Welcome back

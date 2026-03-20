@@ -57,6 +57,7 @@ const createQualificationRow = () => ({
 });
 
 export const createLeadFormDefaults = () => ({
+  serviceType: 'consultancy',
   name: '',
   email: '',
   fullAddress: '',
@@ -74,6 +75,7 @@ export const createLeadFormDefaults = () => ({
   courseLevel: '',
   preferredLocation: '',
   interestedCourse: '',
+  preferredCountries: [],
   campaign: '',
   branchId: '',
   branchName: '',
@@ -87,6 +89,7 @@ export const createLeadFormDefaults = () => ({
 });
 
 export const mapLeadToForm = (lead) => ({
+  serviceType: lead?.serviceType || 'consultancy',
   name: lead?.fullName || lead?.name || '',
   email: lead?.email || '',
   fullAddress: lead?.fullAddress || '',
@@ -104,6 +107,7 @@ export const mapLeadToForm = (lead) => ({
   courseLevel: lead?.courseLevel || lead?.preferredStudyLevel || '',
   preferredLocation: lead?.preferredLocation || '',
   interestedCourse: lead?.interestedCourse || '',
+  preferredCountries: Array.isArray(lead?.preferredCountries) ? lead.preferredCountries : [],
   campaign: lead?.campaign || '',
   branchId: lead?.branchId?._id || lead?.branchId || '',
   branchName: lead?.branchName || lead?.branchId?.name || '',
@@ -143,6 +147,7 @@ export const buildLeadPayload = (form) => {
     .filter((qualification) => Object.values(qualification).some(Boolean));
 
   return {
+    serviceType: form.serviceType || 'consultancy',
     name: form.name.trim(),
     email: form.email.trim() || undefined,
     fullAddress: form.fullAddress.trim() || undefined,
@@ -160,6 +165,7 @@ export const buildLeadPayload = (form) => {
     courseLevel: form.courseLevel.trim(),
     preferredLocation: form.preferredLocation.trim() || undefined,
     interestedCourse: form.interestedCourse.trim() || undefined,
+    preferredCountries: (form.preferredCountries || []).filter(Boolean),
     campaign: form.campaign.trim() || undefined,
     branchId: form.branchId || undefined,
     branchName: form.branchName.trim() || undefined,
@@ -214,6 +220,7 @@ export default function LeadForm({
   initialValue,
   branches = [],
   counsellors = [],
+  countryWorkflows = [],
   submitting = false,
   submitLabel = 'Save lead',
   mode = 'create',
@@ -230,11 +237,30 @@ export default function LeadForm({
     () => Object.fromEntries(branches.map((branch) => [branch._id, branch])),
     [branches]
   );
+  const availableCountries = useMemo(
+    () => countryWorkflows.map((workflow) => workflow.country).filter(Boolean),
+    [countryWorkflows]
+  );
+  const activeWorkflow = useMemo(
+    () =>
+      countryWorkflows.find((workflow) =>
+        form.preferredCountries?.some((country) => country === workflow.country)
+      ) || null,
+    [countryWorkflows, form.preferredCountries]
+  );
 
   const setField = (field, value) =>
     setForm((current) => ({
       ...current,
       [field]: value,
+    }));
+
+  const togglePreferredCountry = (country) =>
+    setForm((current) => ({
+      ...current,
+      preferredCountries: current.preferredCountries.includes(country)
+        ? current.preferredCountries.filter((item) => item !== country)
+        : [...current.preferredCountries, country],
     }));
 
   const setQualificationField = (index, field, value) =>
@@ -303,6 +329,23 @@ export default function LeadForm({
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <h3 className="text-lg font-semibold text-slate-900">Personal Info</h3>
         <div className="mt-5 grid gap-4 md:grid-cols-2">
+          <Field
+            label="Service Type"
+            required
+            hint={
+              form.serviceType === 'test_prep'
+                ? 'This record will be treated as a Student journey.'
+                : 'This record will be treated as a Client journey.'
+            }
+          >
+            <Select
+              value={form.serviceType}
+              onChange={(event) => setField('serviceType', event.target.value)}
+            >
+              <option value="consultancy">Consultancy / Client</option>
+              <option value="test_prep">Test Preparation / Student</option>
+            </Select>
+          </Field>
           <Field label="Name" required>
             <Input value={form.name} onChange={(event) => setField('name', event.target.value)} />
           </Field>
@@ -417,7 +460,77 @@ export default function LeadForm({
               onChange={(event) => setField('interestedCourse', event.target.value)}
             />
           </Field>
+          <Field
+            label="Preferred Countries"
+            hint="Used for counsellor auto-matching and country-specific workflow rules."
+          >
+            <div className="space-y-3">
+              <div className="flex flex-wrap gap-2">
+                {availableCountries.map((country) => {
+                  const selected = form.preferredCountries.includes(country);
+                  return (
+                    <button
+                      key={country}
+                      type="button"
+                      onClick={() => togglePreferredCountry(country)}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                        selected
+                          ? 'border-teal-600 bg-teal-50 text-teal-700'
+                          : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      {country}
+                    </button>
+                  );
+                })}
+              </div>
+              <Input
+                placeholder="Add more countries separated by commas"
+                value={form.preferredCountries.join(', ')}
+                onChange={(event) =>
+                  setField(
+                    'preferredCountries',
+                    event.target.value
+                      .split(',')
+                      .map((item) => item.trim())
+                      .filter(Boolean)
+                  )
+                }
+              />
+            </div>
+          </Field>
         </div>
+        {activeWorkflow ? (
+          <div className="mt-5 rounded-3xl border border-teal-100 bg-teal-50/60 p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-700">
+              Country Workflow Preview
+            </p>
+            <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_1fr_1fr]">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">Lead stages</p>
+                <p className="mt-2 text-sm text-slate-600">
+                  {(activeWorkflow.leadStages || []).map((stage) => stage.label).join(' -> ') ||
+                    'Not configured'}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-900">Application stages</p>
+                <p className="mt-2 text-sm text-slate-600">
+                  {(activeWorkflow.applicationStages || [])
+                    .map((stage) => stage.label)
+                    .join(' -> ') || 'Not configured'}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-900">SLA / follow-up</p>
+                <p className="mt-2 text-sm text-slate-600">
+                  {activeWorkflow.followUpRules?.initialHours || 0}h first follow-up,{' '}
+                  {activeWorkflow.slaRules?.firstResponseHours || 0}h first response SLA
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">

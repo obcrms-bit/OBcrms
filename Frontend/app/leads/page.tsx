@@ -16,6 +16,12 @@ import {
   formatDate,
 } from '@/components/app/shared';
 import { leadAPI } from '@/services/api';
+import { getEntityLabel } from '@/src/services/access';
+import { useLeadStore } from '@/src/stores/AppDataStore';
+import {
+  getSelectedBranchId,
+  WORKSPACE_BRANCH_EVENT,
+} from '@/src/services/workspace';
 
 const LEAD_SOURCES = [
   'website',
@@ -46,14 +52,7 @@ const LEAD_STATUSES = [
 
 export default function LeadsPage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [leads, setLeads] = useState([]);
-  const [pagination, setPagination] = useState({
-    total: 0,
-    page: 1,
-    pages: 1,
-  });
+  const [actionError, setActionError] = useState('');
   const [filters, setFilters] = useState({
     search: '',
     status: '',
@@ -64,47 +63,72 @@ export default function LeadsPage() {
     fromDate: '',
     toDate: '',
   });
+  const {
+    list: leads,
+    pagination,
+    loadingLeads,
+    error: storeError,
+    loadLeads: loadLeadsStore,
+  } = useLeadStore();
 
-  const loadLeads = async (page = 1) => {
-    setLoading(true);
-    setError('');
+  const loadLeads = async (page = 1, overrideFilters = null) => {
+    const effectiveFilters = overrideFilters || filters;
 
     try {
-      const response = await leadAPI.getLeads({
+      setActionError('');
+      await loadLeadsStore({
         page,
         limit: 20,
-        ...(filters.search ? { search: filters.search } : {}),
-        ...(filters.status ? { status: filters.status } : {}),
-        ...(filters.source ? { source: filters.source } : {}),
-        ...(filters.category ? { category: filters.category } : {}),
-        ...(filters.branch ? { branch: filters.branch } : {}),
-        ...(filters.course ? { course: filters.course } : {}),
-        ...(filters.fromDate ? { fromDate: filters.fromDate } : {}),
-        ...(filters.toDate ? { toDate: filters.toDate } : {}),
+        ...(effectiveFilters.search ? { search: effectiveFilters.search } : {}),
+        ...(effectiveFilters.status ? { status: effectiveFilters.status } : {}),
+        ...(effectiveFilters.source ? { source: effectiveFilters.source } : {}),
+        ...(effectiveFilters.category ? { category: effectiveFilters.category } : {}),
+        ...(effectiveFilters.branch ? { branch: effectiveFilters.branch } : {}),
+        ...(effectiveFilters.course ? { course: effectiveFilters.course } : {}),
+        ...(effectiveFilters.fromDate ? { fromDate: effectiveFilters.fromDate } : {}),
+        ...(effectiveFilters.toDate ? { toDate: effectiveFilters.toDate } : {}),
       });
-
-      setLeads(response.data?.data?.leads || []);
-      setPagination(
-        response.data?.data?.pagination || {
-          total: 0,
-          page: 1,
-          pages: 1,
-        }
-      );
     } catch (requestError: any) {
-      setError(
+      setActionError(
         requestError?.response?.data?.message ||
           requestError?.message ||
           'Failed to fetch leads.'
       );
-    } finally {
-      setLoading(false);
     }
   };
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const error = actionError || storeError;
+
   useEffect(() => {
-    loadLeads();
+    const initialSearch =
+      typeof window !== 'undefined'
+        ? new URLSearchParams(window.location.search).get('search') || ''
+        : '';
+    const nextFilters = {
+      ...filters,
+      search: initialSearch,
+      branch: getSelectedBranchId() || filters.branch,
+    };
+    setFilters(nextFilters);
+    loadLeads(1, nextFilters);
+
+    const handleBranchChange = (event) => {
+      const branchId = event?.detail?.branchId || '';
+      setFilters((current) => {
+        const updatedFilters = {
+          ...current,
+          branch: branchId,
+        };
+        loadLeads(1, updatedFilters);
+        return updatedFilters;
+      });
+    };
+
+    window.addEventListener(WORKSPACE_BRANCH_EVENT, handleBranchChange);
+    return () => {
+      window.removeEventListener(WORKSPACE_BRANCH_EVENT, handleBranchChange);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleDelete = async (leadId) => {
@@ -120,7 +144,7 @@ export default function LeadsPage() {
       await leadAPI.deleteLead(leadId);
       await loadLeads(pagination.page);
     } catch (requestError: any) {
-      setError(
+      setActionError(
         requestError?.response?.data?.message ||
           requestError?.message ||
           'Failed to delete the lead.'
@@ -275,17 +299,18 @@ export default function LeadsPage() {
             <button
               className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
               onClick={() => {
-                setFilters({
+                const resetFilters = {
                   search: '',
                   status: '',
                   source: '',
                   category: '',
-                  branch: '',
+                  branch: getSelectedBranchId() || '',
                   course: '',
                   fromDate: '',
                   toDate: '',
-                });
-                setTimeout(() => loadLeads(1), 0);
+                };
+                setFilters(resetFilters);
+                loadLeads(1, resetFilters);
               }}
               type="button"
             >
@@ -304,11 +329,11 @@ export default function LeadsPage() {
           </div>
         </section>
 
-        {loading ? <LoadingState label="Loading lead records..." /> : null}
+        {loadingLeads ? <LoadingState label="Loading lead records..." /> : null}
 
-        {!loading && error ? <ErrorState message={error} onRetry={loadLeads} /> : null}
+        {!loadingLeads && error ? <ErrorState message={error} onRetry={loadLeads} /> : null}
 
-        {!loading && !error ? (
+        {!loadingLeads && !error ? (
           <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="flex items-center justify-between gap-4">
               <div>
@@ -342,6 +367,7 @@ export default function LeadsPage() {
                       <tr>
                         <th className="pb-3">Lead</th>
                         <th className="pb-3">Source</th>
+                        <th className="pb-3">Type</th>
                         <th className="pb-3">Branch</th>
                         <th className="pb-3">Course</th>
                         <th className="pb-3">Stage</th>
@@ -369,6 +395,9 @@ export default function LeadsPage() {
                           </td>
                           <td className="py-4 text-sm text-slate-600">
                             {lead.source || 'Unknown'}
+                          </td>
+                          <td className="py-4 text-sm text-slate-600">
+                            {getEntityLabel(lead)}
                           </td>
                           <td className="py-4 text-sm text-slate-600">
                             {lead.branchName || lead.branchId?.name || 'Not set'}

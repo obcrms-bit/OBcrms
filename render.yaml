@@ -3,6 +3,7 @@ services:
     name: trust-education-crm-api
     runtime: node
     rootDir: Backend
+    branch: main
     plan: free
     region: oregon
     autoDeployTrigger: commit

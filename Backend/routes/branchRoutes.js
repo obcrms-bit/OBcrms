@@ -1,13 +1,22 @@
 const express = require('express');
 const router = express.Router();
 const branchController = require('../controllers/branch.controller');
-const { protect, restrict } = require('../middleware/AuthMiddleware');
+const {
+  enforceLimit,
+  protect,
+  requirePermission,
+} = require('../middleware/AuthMiddleware');
 
 router.use(protect);
 
-router.get('/', branchController.getBranches);
-router.post('/', restrict('admin'), branchController.createBranch);
-router.put('/:id', restrict('admin'), branchController.updateBranch);
-router.delete('/:id', restrict('admin'), branchController.deleteBranch);
+router.get('/', requirePermission('branches', 'view'), branchController.getBranches);
+router.post(
+  '/',
+  enforceLimit('branches'),
+  requirePermission('branches', 'create'),
+  branchController.createBranch
+);
+router.put('/:id', requirePermission('branches', 'edit'), branchController.updateBranch);
+router.delete('/:id', requirePermission('branches', 'manage'), branchController.deleteBranch);
 
 module.exports = router;

@@ -3,10 +3,27 @@ const Lead = require('../models/Lead');
 const Student = require('../models/Student');
 const Activity = require('../models/Activity');
 const Branch = require('../models/Branch');
+const CountryWorkflow = require('../models/CountryWorkflow');
 const User = require('../models/User');
 const { sendSuccess, sendError } = require('../utils/responseHandler');
 const { calculateLeadScore } = require('../utils/leadScoring');
 const { runReminderSweep } = require('../services/followUpReminder.service');
+const {
+  getPrimaryCountryWorkflow,
+  getTenantLeadStages,
+} = require('../services/countryWorkflow.service');
+const {
+  findBestCounsellorMatch,
+  normalizeCountryList,
+} = require('../services/counsellorMatching.service');
+const {
+  buildScopedClause,
+  getUserBranchIds,
+  hasPermission,
+  mergeFiltersWithAnd,
+  toObjectIdString,
+} = require('../services/accessControl.service');
+const { runAutomationEvent } = require('../services/automation.service');
 
 const PIPELINE_STATUSES = [
   'new',
@@ -31,9 +48,6 @@ const FOLLOW_UP_OUTCOMES = [
   'no_response',
   'other',
 ];
-
-const SELF_SCOPED_ROLES = ['counselor', 'sales'];
-const FULL_ACCESS_ROLES = ['super_admin', 'admin', 'manager', 'accountant'];
 
 const asyncHandler = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
@@ -79,6 +93,9 @@ const normalizeDate = (value) => {
 const formatLeadName = (lead) =>
   lead?.fullName || lead?.name || `${lead?.firstName || ''} ${lead?.lastName || ''}`.trim();
 
+const getEntityLabel = (record) =>
+  record?.serviceType === 'test_prep' ? 'Student' : 'Client';
+
 const splitName = (value) => {
   const normalizedValue = normalizeString(value);
   if (!normalizedValue) {
@@ -96,33 +113,17 @@ const splitName = (value) => {
   };
 };
 
-const shouldScopeToAssigned = (user) => SELF_SCOPED_ROLES.includes(user?.role);
-const hasFullLeadAccess = (user) => FULL_ACCESS_ROLES.includes(user?.role);
+const hasFullLeadAccess = (user) =>
+  Boolean(
+    user?.effectiveAccess?.isHeadOffice ||
+      hasPermission(user, 'leads', 'manage') ||
+      hasPermission(user, 'leads', 'assign')
+  );
 
-const getStageNumber = (status) => {
-  switch (status) {
-  case 'new':
-    return 1;
-  case 'contacted':
-  case 'qualified':
-    return 2;
-  case 'counselling_scheduled':
-  case 'counselling_done':
-    return 3;
-  case 'application_started':
-  case 'documents_pending':
-  case 'application_submitted':
-  case 'offer_received':
-    return 4;
-  case 'visa_applied':
-    return 5;
-  case 'enrolled':
-  case 'lost':
-    return 6;
-  default:
-    return 1;
-  }
-};
+const shouldAutoAssignToSelf = (user) =>
+  ['agent', 'follow_up_team', 'counselor'].includes(
+    user?.effectiveAccess?.roleKey || user?.primaryRoleKey || user?.role
+  );
 
 const sanitizeQualification = (qualification) => ({
   country: normalizeString(qualification?.country) || '',
@@ -198,9 +199,16 @@ const sanitizeLeadPayload = (rawPayload = {}) => {
     ),
     howDidYouKnowUs: normalizeString(rawPayload.howDidYouKnowUs) || undefined,
     source: normalizeLowerString(rawPayload.source),
+    sourceType: normalizeLowerString(rawPayload.sourceType) || undefined,
+    sourceMeta:
+      rawPayload.sourceMeta && typeof rawPayload.sourceMeta === 'object'
+        ? rawPayload.sourceMeta
+        : undefined,
     campaign: normalizeString(rawPayload.campaign) || undefined,
     branchId: normalizeString(rawPayload.branchId) || undefined,
     branchName: normalizeString(rawPayload.branchName) || undefined,
+    serviceType: normalizeLowerString(rawPayload.serviceType) || undefined,
+    entityType: normalizeLowerString(rawPayload.entityType) || undefined,
     stream: normalizeString(rawPayload.stream) || undefined,
     interestedFor: normalizeString(rawPayload.interestedFor) || undefined,
     courseLevel: preferredStudyLevel || undefined,
@@ -270,26 +278,100 @@ const getValidationErrors = (payload, { isUpdate = false } = {}) => {
   if (payload.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email)) {
     errors.push('Email address is invalid.');
   }
-  if (payload.status && !PIPELINE_STATUSES.includes(payload.status)) {
-    errors.push('Invalid lead pipeline stage.');
+  if (payload.serviceType && !['consultancy', 'test_prep'].includes(payload.serviceType)) {
+    errors.push('Service type must be consultancy or test_prep.');
   }
 
   return errors;
 };
 
-const getScopedLeadFilter = (req, extra = {}) => {
-  const filter = { companyId: req.companyId, deletedAt: null, ...extra };
-  if (shouldScopeToAssigned(req.user)) {
-    filter.assignedCounsellor = req.user._id;
+const formatStageLabel = (value) =>
+  String(value || '')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+
+const getStageNumber = (status, workflowStages = []) => {
+  const matchedWorkflowStage = workflowStages.find((stage) => stage.key === status);
+  if (matchedWorkflowStage) {
+    return Number(matchedWorkflowStage.order || 1);
   }
-  return filter;
+
+  switch (status) {
+  case 'new':
+    return 1;
+  case 'contacted':
+  case 'qualified':
+    return 2;
+  case 'counselling_scheduled':
+  case 'counselling_done':
+    return 3;
+  case 'application_started':
+  case 'documents_pending':
+  case 'application_submitted':
+  case 'offer_received':
+    return 4;
+  case 'visa_applied':
+    return 5;
+  case 'enrolled':
+  case 'lost':
+    return 6;
+  default:
+    return 1;
+  }
 };
+
+const resolveLeadWorkflow = async (companyId, preferredCountries = []) => {
+  const normalizedCountries = normalizeCountryList(preferredCountries);
+  if (!normalizedCountries.length) {
+    return { workflow: null, workflowStages: await getTenantLeadStages(companyId) };
+  }
+
+  const workflow = await getPrimaryCountryWorkflow(companyId, normalizedCountries);
+  const workflowStages =
+    workflow?.leadStages?.length ? workflow.leadStages : await getTenantLeadStages(companyId);
+
+  return { workflow, workflowStages };
+};
+
+const getScopedLeadFilter = async (req, extra = {}) =>
+  mergeFiltersWithAnd(
+    { companyId: req.companyId, deletedAt: null },
+    await buildScopedClause(req.user, 'leads', {
+      branchField: 'branchId',
+      assigneeFields: ['assignedCounsellor', 'assignedTo'],
+      creatorFields: ['createdByUser'],
+      ownerFields: ['ownerUserId'],
+    }),
+    extra
+  );
 
 const canWriteLead = (user, lead) => {
   if (hasFullLeadAccess(user)) {
     return true;
   }
-  return String(lead.assignedCounsellor || lead.assignedTo || '') === String(user?._id || '');
+
+  if (
+    lead.ownershipLocked &&
+    !hasPermission(user, 'leads', 'override') &&
+    !hasPermission(user, 'leads', 'unlock')
+  ) {
+    return String(lead.ownerUserId || lead.assignedCounsellor || '') === String(user?._id || '');
+  }
+
+  const userBranchIds = getUserBranchIds(user);
+  const leadBranchId = toObjectIdString(lead.branchId);
+
+  if (String(lead.assignedCounsellor || lead.assignedTo || '') === String(user?._id || '')) {
+    return true;
+  }
+  if (String(lead.createdByUser || lead.ownerUserId || '') === String(user?._id || '')) {
+    return true;
+  }
+  if (leadBranchId && userBranchIds.includes(leadBranchId) && hasPermission(user, 'leads', 'edit')) {
+    return true;
+  }
+
+  return false;
 };
 
 const populateLead = (query) =>
@@ -326,6 +408,30 @@ const logActivity = async (companyId, entityId, action, description, performedBy
 const addLeadActivity = (lead, type, description, performedBy, metadata = {}) => {
   lead.activities = lead.activities || [];
   lead.activities.push({ type, description, performedBy, metadata });
+};
+
+const buildAutoFollowUp = (workflow, actorId, counsellorName = '') => {
+  if (!workflow?.followUpRules?.initialHours) {
+    return null;
+  }
+
+  const scheduledAt = new Date(Date.now() + workflow.followUpRules.initialHours * 60 * 60 * 1000);
+  return {
+    scheduledAt,
+    scheduledBy: actorId,
+    type: 'call',
+    notes: `Auto-scheduled by ${workflow.country} workflow`,
+    status: 'pending',
+    counsellorName,
+  };
+};
+
+const applyBranchQueryFilter = (req, filter) => {
+  if (!req.query.branchId || !mongoose.Types.ObjectId.isValid(req.query.branchId)) {
+    return filter;
+  }
+
+  return mergeFiltersWithAnd(filter, { branchId: req.query.branchId });
 };
 
 const syncLeadFollowUps = (lead) => {
@@ -377,7 +483,18 @@ const ensureCounsellorInCompany = async (companyId, counsellorId) => {
     _id: counsellorId,
     companyId,
     isActive: true,
-    role: { $in: ['counselor', 'manager', 'sales', 'admin', 'super_admin'] },
+    role: {
+      $in: [
+        'counselor',
+        'manager',
+        'sales',
+        'admin',
+        'super_admin',
+        'follow_up_team',
+        'branch_manager',
+        'head_office_admin',
+      ],
+    },
   }).select('name email role');
 };
 
@@ -422,7 +539,7 @@ exports.getLeads = asyncHandler(async (req, res) => {
     recordType,
   } = req.query;
 
-  const filter = getScopedLeadFilter(req);
+  const filter = await getScopedLeadFilter(req);
   if (status) filter.status = status;
   if (source) filter.source = source;
   if (counsellor && hasFullLeadAccess(req.user)) filter.assignedCounsellor = counsellor;
@@ -471,12 +588,49 @@ exports.getLeads = asyncHandler(async (req, res) => {
   });
 });
 
+exports.getWorkflowOptions = asyncHandler(async (req, res) => {
+  const [workflows, stages] = await Promise.all([
+    CountryWorkflow.find({ companyId: req.companyId, isActive: true })
+      .sort({ country: 1 })
+      .lean(),
+    getTenantLeadStages(req.companyId),
+  ]);
+
+  sendSuccess(res, 200, 'Lead workflow options fetched', {
+    workflows,
+    stages,
+  });
+});
+
 exports.createLead = asyncHandler(async (req, res) => {
   const payload = sanitizeLeadPayload(req.body);
+  const { workflow, workflowStages } = await resolveLeadWorkflow(
+    req.companyId,
+    payload.preferredCountries || []
+  );
+  const allowedStageKeys = workflowStages.map((stage) => stage.key);
 
-  if (!payload.assignedCounsellor && shouldScopeToAssigned(req.user)) {
+  if (payload.status && !allowedStageKeys.includes(payload.status)) {
+    return sendError(res, 400, 'Invalid lead pipeline stage for the selected country workflow.');
+  }
+
+  if (!payload.assignedCounsellor && shouldAutoAssignToSelf(req.user)) {
     payload.assignedCounsellor = req.user._id;
     payload.assignedTo = req.user._id;
+  }
+
+  let autoMatch = null;
+  if (!payload.assignedCounsellor) {
+    autoMatch = await findBestCounsellorMatch({
+      companyId: req.companyId,
+      branchId: payload.branchId || req.user?.branchId?._id || req.user?.branchId || null,
+      preferredCountries: payload.preferredCountries || [],
+    });
+
+    if (autoMatch?.counsellor?._id) {
+      payload.assignedCounsellor = autoMatch.counsellor._id;
+      payload.assignedTo = autoMatch.counsellor._id;
+    }
   }
 
   if (payload.assignedCounsellor) {
@@ -502,17 +656,34 @@ exports.createLead = asyncHandler(async (req, res) => {
   const lead = new Lead({
     ...payload,
     companyId: req.companyId,
-    status: payload.status || payload.pipelineStage || 'new',
-    pipelineStage: payload.pipelineStage || payload.status || 'new',
-    stage: getStageNumber(payload.status || payload.pipelineStage || 'new'),
+    createdByUser: req.user?._id,
+    ownerUserId: payload.assignedCounsellor || req.user?._id,
+    serviceType: payload.serviceType || 'consultancy',
+    entityType: payload.serviceType === 'test_prep' ? 'student' : 'client',
+    status: payload.status || payload.pipelineStage || workflowStages[0]?.key || 'new',
+    pipelineStage: payload.pipelineStage || payload.status || workflowStages[0]?.key || 'new',
+    stage: getStageNumber(
+      payload.status || payload.pipelineStage || workflowStages[0]?.key || 'new',
+      workflowStages
+    ),
     recordType: payload.recordType || 'lead',
+    metadata: {
+      ...(payload.metadata || {}),
+      workflowCountry: workflow?.country || null,
+      autoAssignedByCountryMatch: Boolean(autoMatch?.counsellor?._id),
+      matchedCountries: autoMatch?.matchedCountries || [],
+    },
+    sourceType: payload.sourceType || 'manual_entry',
+    sourceMeta: payload.sourceMeta || {},
     assignmentHistory: payload.assignedCounsellor
       ? [
         {
           counsellor: payload.assignedCounsellor,
           assignedAt: new Date(),
           assignedBy: req.user?._id,
-          reason: 'Assigned during lead creation',
+          reason: autoMatch?.counsellor?._id
+            ? `Auto-assigned by country match (${(autoMatch.matchedCountries || []).join(', ')})`
+            : 'Assigned during lead creation',
         },
       ]
       : [],
@@ -537,12 +708,29 @@ exports.createLead = asyncHandler(async (req, res) => {
   const { score, category } = calculateLeadScore(lead);
   lead.leadScore = score;
   lead.leadCategory = category;
+
+  const autoFollowUp = buildAutoFollowUp(workflow, req.user?._id, req.user?.name);
+  if (autoFollowUp) {
+    lead.followUps.push(autoFollowUp);
+    addLeadActivity(
+      lead,
+      'followup_scheduled',
+      `Initial follow-up auto-scheduled by ${workflow.country} workflow`,
+      req.user?._id,
+      { scheduledAt: autoFollowUp.scheduledAt, workflowCountry: workflow.country }
+    );
+  }
+
   addLeadActivity(
     lead,
     'lead_created',
     `Lead created by ${req.user?.name || 'system'}`,
     req.user?._id,
-    { pipelineStage: lead.pipelineStage }
+    {
+      pipelineStage: lead.pipelineStage,
+      workflowCountry: workflow?.country || null,
+      autoAssignedCounsellorId: autoMatch?.counsellor?._id || null,
+    }
   );
 
   await lead.save();
@@ -555,12 +743,29 @@ exports.createLead = asyncHandler(async (req, res) => {
     { performedByName: req.user?.name }
   );
 
+  await runAutomationEvent({
+    companyId: req.companyId,
+    branchId: lead.branchId,
+    triggerEvent: 'lead.created',
+    module: 'leads',
+    target: lead,
+    actor: req.user,
+    context: {
+      preferredCountries: lead.preferredCountries || [],
+      sourceType: lead.sourceType,
+    },
+  });
+
   const createdLead = await populateLead(Lead.findById(lead._id));
-  sendSuccess(res, 201, 'Lead created successfully', { lead: createdLead });
+  sendSuccess(res, 201, 'Lead created successfully', {
+    lead: createdLead,
+    workflow,
+    workflowStages,
+  });
 });
 
 exports.getLeadById = asyncHandler(async (req, res) => {
-  const lead = await populateLead(Lead.findOne(getScopedLeadFilter(req, { _id: req.params.id })));
+  const lead = await populateLead(Lead.findOne(await getScopedLeadFilter(req, { _id: req.params.id })));
   if (!lead) {
     return sendError(res, 404, 'Lead not found');
   }
@@ -569,7 +774,12 @@ exports.getLeadById = asyncHandler(async (req, res) => {
     await lead.save();
   }
 
-  sendSuccess(res, 200, 'Lead fetched', { lead });
+  const { workflow, workflowStages } = await resolveLeadWorkflow(
+    req.companyId,
+    lead.preferredCountries || []
+  );
+
+  sendSuccess(res, 200, 'Lead fetched', { lead, workflow, workflowStages });
 });
 
 exports.updateLead = asyncHandler(async (req, res) => {
@@ -587,11 +797,37 @@ exports.updateLead = asyncHandler(async (req, res) => {
 
   const payload = sanitizeLeadPayload(req.body);
   await hydrateBranchName(req.companyId, payload);
+  const { workflow, workflowStages } = await resolveLeadWorkflow(
+    req.companyId,
+    payload.preferredCountries || lead.preferredCountries || []
+  );
+  const allowedStageKeys = workflowStages.map((stage) => stage.key);
+
+  if ((payload.status || payload.pipelineStage) && !allowedStageKeys.includes(payload.status || payload.pipelineStage)) {
+    return sendError(res, 400, 'Invalid lead pipeline stage for the selected country workflow.');
+  }
 
   if (payload.assignedCounsellor) {
     const counsellor = await ensureCounsellorInCompany(req.companyId, payload.assignedCounsellor);
     if (!counsellor) {
       return sendError(res, 400, 'Selected assignee does not belong to your company.');
+    }
+  }
+
+  if (
+    !payload.assignedCounsellor &&
+    !lead.assignedCounsellor &&
+    (payload.preferredCountries || lead.preferredCountries)?.length
+  ) {
+    const autoMatch = await findBestCounsellorMatch({
+      companyId: req.companyId,
+      branchId: payload.branchId || lead.branchId || req.user?.branchId?._id || req.user?.branchId || null,
+      preferredCountries: payload.preferredCountries || lead.preferredCountries || [],
+    });
+
+    if (autoMatch?.counsellor?._id) {
+      payload.assignedCounsellor = autoMatch.counsellor._id;
+      payload.assignedTo = autoMatch.counsellor._id;
     }
   }
 
@@ -619,8 +855,13 @@ exports.updateLead = asyncHandler(async (req, res) => {
   if (payload.status || payload.pipelineStage) {
     lead.status = payload.status || payload.pipelineStage;
     lead.pipelineStage = payload.pipelineStage || payload.status;
-    lead.stage = getStageNumber(lead.status);
+    lead.stage = getStageNumber(lead.status, workflowStages);
   }
+
+  lead.metadata = {
+    ...(lead.metadata || {}),
+    workflowCountry: workflow?.country || lead.metadata?.workflowCountry || null,
+  };
 
   if (payload.assignedCounsellor && String(payload.assignedCounsellor) !== previousCounsellor) {
     lead.assignmentHistory.push({
@@ -663,7 +904,7 @@ exports.updateLead = asyncHandler(async (req, res) => {
   });
 
   const updatedLead = await populateLead(Lead.findById(lead._id));
-  sendSuccess(res, 200, 'Lead updated', { lead: updatedLead });
+  sendSuccess(res, 200, 'Lead updated', { lead: updatedLead, workflow, workflowStages });
 });
 
 const buildStudentPayloadFromLead = (lead, user) => {
@@ -672,6 +913,9 @@ const buildStudentPayloadFromLead = (lead, user) => {
     companyId: lead.companyId,
     branchId: lead.branchId,
     branchName: lead.branchName,
+    createdByUser: lead.createdByUser || user?._id,
+    serviceType: lead.serviceType || 'consultancy',
+    entityType: lead.serviceType === 'test_prep' ? 'student' : 'client',
     leadId: lead._id,
     fullName: formatLeadName(lead),
     firstName: lead.firstName,
@@ -763,6 +1007,7 @@ const convertLeadDocumentToStudent = async (lead, reqUser, { followUp = null } =
   lead.convertedToStudent = true;
   lead.studentId = student._id;
   lead.convertedAt = new Date();
+  lead.entityType = lead.serviceType === 'test_prep' ? 'student' : 'client';
   lead.recordType = 'student';
   lead.status = 'enrolled';
   lead.pipelineStage = 'enrolled';
@@ -776,7 +1021,7 @@ const convertLeadDocumentToStudent = async (lead, reqUser, { followUp = null } =
   addLeadActivity(
     lead,
     'converted_to_student',
-    `Lead converted to student (${student.fullName})`,
+    `Lead converted to ${getEntityLabel(lead).toLowerCase()} (${student.fullName})`,
     reqUser?._id,
     { studentId: student._id }
   );
@@ -825,10 +1070,18 @@ exports.assignCounsellor = asyncHandler(async (req, res) => {
   if (!lead) {
     return sendError(res, 404, 'Lead not found');
   }
+  if (
+    lead.ownershipLocked &&
+    !hasPermission(req.user, 'leads', 'override') &&
+    !hasPermission(req.user, 'leads', 'unlock')
+  ) {
+    return sendError(res, 403, 'Lead ownership is locked and cannot be reassigned.');
+  }
 
   const previousCounsellor = lead.assignedCounsellor;
   lead.assignedCounsellor = counsellor._id;
   lead.assignedTo = counsellor._id;
+  lead.ownerUserId = counsellor._id;
   lead.assignmentHistory.push({
     counsellor: counsellor._id,
     assignedAt: new Date(),
@@ -858,9 +1111,6 @@ exports.assignCounsellor = asyncHandler(async (req, res) => {
 
 exports.updateStatus = asyncHandler(async (req, res) => {
   const { status } = req.body;
-  if (!PIPELINE_STATUSES.includes(status)) {
-    return sendError(res, 400, 'Invalid lead status supplied.');
-  }
 
   const lead = await Lead.findOne({
     _id: req.params.id,
@@ -874,22 +1124,31 @@ exports.updateStatus = asyncHandler(async (req, res) => {
     return sendError(res, 403, 'You do not have permission to update this lead.');
   }
 
+  const { workflow, workflowStages } = await resolveLeadWorkflow(
+    req.companyId,
+    lead.preferredCountries || []
+  );
+  const allowedStageKeys = workflowStages.map((stage) => stage.key);
+  if (!allowedStageKeys.includes(status)) {
+    return sendError(res, 400, 'Invalid lead status supplied for the selected workflow.');
+  }
+
   const previousStatus = lead.status;
   lead.status = status;
   lead.pipelineStage = status;
-  lead.stage = getStageNumber(status);
+  lead.stage = getStageNumber(status, workflowStages);
 
   addLeadActivity(
     lead,
     'status_changed',
     `Status updated from ${previousStatus} to ${status}`,
     req.user?._id,
-    { from: previousStatus, to: status }
+    { from: previousStatus, to: status, workflowCountry: workflow?.country || null }
   );
 
   await lead.save();
   const updatedLead = await populateLead(Lead.findById(lead._id));
-  sendSuccess(res, 200, 'Status updated', { lead: updatedLead });
+  sendSuccess(res, 200, 'Status updated', { lead: updatedLead, workflow, workflowStages });
 });
 
 exports.scheduleFollowUp = asyncHandler(async (req, res) => {
@@ -1231,7 +1490,7 @@ const filterFollowUpItems = (items, query) => {
 
 exports.getActivities = asyncHandler(async (req, res) => {
   const lead = await populateLead(
-    Lead.findOne(getScopedLeadFilter(req, { _id: req.params.id })).select('activities')
+    Lead.findOne(await getScopedLeadFilter(req, { _id: req.params.id })).select('activities')
   );
 
   if (!lead) {
@@ -1243,7 +1502,7 @@ exports.getActivities = asyncHandler(async (req, res) => {
 
 exports.getLeadFollowUps = asyncHandler(async (req, res) => {
   const lead = await populateLead(
-    Lead.findOne(getScopedLeadFilter(req, { _id: req.params.id })).select(
+    Lead.findOne(await getScopedLeadFilter(req, { _id: req.params.id })).select(
       'firstName lastName name email phone mobile branchName status pipelineStage assignedCounsellor followUps nextFollowUp'
     )
   );
@@ -1263,18 +1522,31 @@ exports.getLeadFollowUps = asyncHandler(async (req, res) => {
 });
 
 exports.getPipeline = asyncHandler(async (req, res) => {
-  const stages = [...PIPELINE_STATUSES];
+  const workflowStages = await getTenantLeadStages(req.companyId);
+  const scopedFilter = applyBranchQueryFilter(req, await getScopedLeadFilter(req));
   const leads = await populateLead(
-    Lead.find(getScopedLeadFilter(req)).select(
+    Lead.find(scopedFilter).select(
       'firstName lastName name email phone mobile status pipelineStage leadScore leadCategory source preferredCountries interestedCourse assignedCounsellor nextFollowUp updatedAt createdAt'
     )
   ).lean();
 
+  const stages = [
+    ...workflowStages,
+    ...leads
+      .map((lead) => ({
+        key: lead.pipelineStage || lead.status,
+        label: formatStageLabel(lead.pipelineStage || lead.status),
+        order: workflowStages.length + 1,
+      }))
+      .filter((stage) => stage.key && !workflowStages.some((item) => item.key === stage.key)),
+  ];
+
   const result = {};
   stages.forEach((stage) => {
-    const stageLeads = leads.filter((lead) => (lead.pipelineStage || lead.status) === stage);
-    result[stage] = {
-      stage,
+    const stageLeads = leads.filter((lead) => (lead.pipelineStage || lead.status) === stage.key);
+    result[stage.key] = {
+      stage: stage.key,
+      label: stage.label,
       count: stageLeads.length,
       leads: stageLeads.slice(0, 100),
     };
@@ -1287,10 +1559,11 @@ exports.getDueFollowUps = asyncHandler(async (req, res) => {
   const horizonDays = Number(req.query.days || 7);
   const horizonDate = new Date();
   horizonDate.setDate(horizonDate.getDate() + horizonDays);
+  const scopedFilter = applyBranchQueryFilter(req, await getScopedLeadFilter(req));
 
   const leads = await populateLead(
     Lead.find({
-      ...getScopedLeadFilter(req),
+      ...scopedFilter,
       followUps: {
         $elemMatch: {
           status: { $in: ['pending', 'overdue'] },
@@ -1347,9 +1620,10 @@ exports.getDueFollowUps = asyncHandler(async (req, res) => {
 
 exports.getFollowUps = asyncHandler(async (req, res) => {
   const { page = 1, limit = 20 } = req.query;
+  const scopedFilter = applyBranchQueryFilter(req, await getScopedLeadFilter(req));
   const leads = await populateLead(
     Lead.find({
-      ...getScopedLeadFilter(req),
+      ...scopedFilter,
       followUps: { $exists: true, $ne: [] },
     }).select(
       'firstName lastName name email phone mobile source branchName stream status pipelineStage assignedCounsellor followUps nextFollowUp'
@@ -1392,14 +1666,18 @@ exports.getFollowUpDashboardSummary = asyncHandler(async (req, res) => {
   endOfDay.setHours(23, 59, 59, 999);
   const contactThreshold = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
 
+  const scopedFilter = applyBranchQueryFilter(req, await getScopedLeadFilter(req));
   const leads = await populateLead(
-    Lead.find(getScopedLeadFilter(req)).select(
+    Lead.find(scopedFilter).select(
       'firstName lastName name email phone mobile source branchName stream status pipelineStage assignedCounsellor followUps nextFollowUp lastContactedAt convertedToStudent'
     )
   );
 
   const activeLeadStatuses = new Set(
-    PIPELINE_STATUSES.filter((status) => !['enrolled', 'lost'].includes(status))
+    [
+      ...PIPELINE_STATUSES,
+      ...leads.map((lead) => lead.pipelineStage || lead.status).filter(Boolean),
+    ].filter((status) => !['enrolled', 'lost'].includes(status))
   );
   const allFollowUps = [];
   const byCounsellor = {};
@@ -1521,7 +1799,7 @@ exports.getFollowUpDashboardSummary = asyncHandler(async (req, res) => {
 });
 
 exports.triggerReminderSweep = asyncHandler(async (req, res) => {
-  if (!hasFullLeadAccess(req.user)) {
+  if (!hasPermission(req.user, 'followups', 'manage') && !hasFullLeadAccess(req.user)) {
     return sendError(res, 403, 'Only admins and managers can trigger reminder sweeps.');
   }
 
@@ -1554,4 +1832,59 @@ exports.recalculateScore = asyncHandler(async (req, res) => {
   await lead.save();
 
   sendSuccess(res, 200, 'Score recalculated', { score, category, breakdown });
+});
+
+exports.lockOwnership = asyncHandler(async (req, res) => {
+  const { reason } = req.body;
+  if (!normalizeString(reason)) {
+    return sendError(res, 400, 'A lock reason is required.');
+  }
+
+  const lead = await Lead.findOne({
+    _id: req.params.id,
+    companyId: req.companyId,
+    deletedAt: null,
+  });
+  if (!lead) {
+    return sendError(res, 404, 'Lead not found');
+  }
+  if (!hasPermission(req.user, 'leads', 'lock') && !hasPermission(req.user, 'leads', 'override')) {
+    return sendError(res, 403, 'You do not have permission to lock ownership.');
+  }
+
+  lead.ownershipLocked = true;
+  lead.ownershipLockedBy = req.user?._id;
+  lead.ownershipLockedAt = new Date();
+  lead.ownershipLockReason = normalizeString(reason);
+
+  addLeadActivity(lead, 'ownership_locked', 'Lead ownership locked', req.user?._id, {
+    reason: lead.ownershipLockReason,
+  });
+
+  await lead.save();
+  sendSuccess(res, 200, 'Lead ownership locked successfully', { lead });
+});
+
+exports.unlockOwnership = asyncHandler(async (req, res) => {
+  const lead = await Lead.findOne({
+    _id: req.params.id,
+    companyId: req.companyId,
+    deletedAt: null,
+  });
+  if (!lead) {
+    return sendError(res, 404, 'Lead not found');
+  }
+  if (!hasPermission(req.user, 'leads', 'unlock') && !hasPermission(req.user, 'leads', 'override')) {
+    return sendError(res, 403, 'You do not have permission to unlock ownership.');
+  }
+
+  lead.ownershipLocked = false;
+  lead.ownershipLockedBy = null;
+  lead.ownershipLockedAt = null;
+  lead.ownershipLockReason = '';
+
+  addLeadActivity(lead, 'ownership_unlocked', 'Lead ownership unlocked', req.user?._id);
+
+  await lead.save();
+  sendSuccess(res, 200, 'Lead ownership unlocked successfully', { lead });
 });

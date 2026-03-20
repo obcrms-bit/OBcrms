@@ -529,9 +529,9 @@ export default function ChatPage() {
                               >
                                 {formatDateTime(message.createdAt)}
                                 {isMine && message.isSeen
-                                  ? ' • Seen'
+                                  ? ' / Seen'
                                   : isMine && message.deliveredAt
-                                    ? ' • Delivered'
+                                    ? ' / Delivered'
                                     : ''}
                               </div>
                             </div>

@@ -4,16 +4,43 @@ const User = require('../models/User');
 const { sendSuccess, sendError } = require('../utils/responseHandler');
 const { isValidTransition } = require('../constants/workflow');
 const mongoose = require('mongoose');
+const {
+  buildScopedClause,
+  getUserBranchIds,
+  hasPermission,
+  mergeFiltersWithAnd,
+  toObjectIdString,
+} = require('../services/accessControl.service');
+
+const getScopedStudentFilter = async (req, extra = {}) =>
+  mergeFiltersWithAnd(
+    { companyId: new mongoose.Types.ObjectId(req.companyId), deletedAt: null },
+    await buildScopedClause(req.user, 'leads', {
+      branchField: 'branchId',
+      assigneeFields: ['assignedCounselor'],
+      creatorFields: ['createdByUser'],
+      ownerFields: ['assignedCounselor'],
+    }),
+    extra
+  );
+
+const canManageStudent = (user, student) => {
+  if (user?.effectiveAccess?.isHeadOffice || hasPermission(user, 'leads', 'manage')) {
+    return true;
+  }
+
+  if (String(student.assignedCounselor || '') === String(user?._id || '')) {
+    return true;
+  }
+
+  const userBranchIds = getUserBranchIds(user);
+  return userBranchIds.includes(toObjectIdString(student.branchId)) && hasPermission(user, 'leads', 'edit');
+};
 
 exports.getStudents = async (req, res) => {
   try {
     const { page = 1, limit = 10, search = '' } = req.query;
-    const companyObjectId = new mongoose.Types.ObjectId(req.companyId);
-    const query = { companyId: companyObjectId, deletedAt: null };
-
-    if (req.user.role === 'counselor') {
-      query.assignedCounselor = req.user._id;
-    }
+    const query = await getScopedStudentFilter(req);
 
     if (search) {
       query.$or = [
@@ -43,18 +70,11 @@ exports.getStudents = async (req, res) => {
 
 exports.getStudentById = async (req, res) => {
   try {
-    const student = await Student.findOne({
-      _id: req.params.id,
-      companyId: new mongoose.Types.ObjectId(req.companyId),
-      deletedAt: null,
-    }).populate('assignedCounselor', 'name email role');
+    const student = await Student.findOne(await getScopedStudentFilter(req, { _id: req.params.id })).populate(
+      'assignedCounselor',
+      'name email role'
+    );
     if (!student) return sendError(res, 404, 'Student not found');
-    if (
-      req.user.role === 'counselor' &&
-      String(student.assignedCounselor || '') !== String(req.user._id)
-    ) {
-      return sendError(res, 403, 'You can only view students assigned to you');
-    }
     return sendSuccess(res, 200, 'Student details retrieved', student);
   } catch (error) {
     return sendError(res, 400, 'Invalid student ID', error.message);
@@ -66,6 +86,9 @@ exports.createStudent = async (req, res) => {
     const student = await Student.create({
       ...req.body,
       companyId: new mongoose.Types.ObjectId(req.companyId),
+      createdByUser: req.user?._id,
+      serviceType: req.body.serviceType || 'consultancy',
+      entityType: req.body.serviceType === 'test_prep' ? 'student' : 'client',
     });
 
     await AuditLog.logAction({
@@ -88,12 +111,15 @@ exports.createStudent = async (req, res) => {
 exports.updateStudent = async (req, res) => {
   try {
     const student = await Student.findOneAndUpdate(
-      { _id: req.params.id, companyId: new mongoose.Types.ObjectId(req.companyId) },
+      await getScopedStudentFilter(req, { _id: req.params.id }),
       { $set: req.body },
       { new: true, runValidators: true }
     );
 
     if (!student) return sendError(res, 404, 'Student not found');
+    if (!canManageStudent(req.user, student)) {
+      return sendError(res, 403, 'You do not have permission to update this record');
+    }
 
     await AuditLog.logAction({
       companyId: req.companyId,
@@ -116,7 +142,7 @@ exports.updateStudent = async (req, res) => {
 exports.deleteStudent = async (req, res) => {
   try {
     const student = await Student.findOneAndUpdate(
-      { _id: req.params.id, companyId: new mongoose.Types.ObjectId(req.companyId) },
+      await getScopedStudentFilter(req, { _id: req.params.id }),
       { deletedAt: new Date() },
       { new: true }
     );
@@ -144,15 +170,10 @@ exports.updateStudentStatus = async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
-    const companyObjectId = new mongoose.Types.ObjectId(req.companyId);
-
-    const student = await Student.findOne({ _id: id, companyId: companyObjectId });
+    const student = await Student.findOne(await getScopedStudentFilter(req, { _id: id }));
     if (!student) return sendError(res, 404, 'Student not found');
-    if (
-      req.user.role === 'counselor' &&
-      String(student.assignedCounselor || '') !== String(req.user._id)
-    ) {
-      return sendError(res, 403, 'You can only update students assigned to you');
+    if (!canManageStudent(req.user, student)) {
+      return sendError(res, 403, 'You do not have permission to update this student');
     }
 
     if (!isValidTransition('STUDENT', student.status, status)) {
@@ -189,13 +210,11 @@ exports.assignCounselor = async (req, res) => {
       return sendError(res, 400, 'Valid counselorId is required');
     }
 
-    const companyObjectId = new mongoose.Types.ObjectId(req.companyId);
-
     const counselor = await User.findOne({
       _id: counselorId,
-      companyId: companyObjectId,
+      companyId: new mongoose.Types.ObjectId(req.companyId),
       isActive: true,
-      role: { $in: ['counselor', 'manager'] },
+      role: { $in: ['counselor', 'manager', 'follow_up_team', 'branch_manager'] },
     }).select('name email role');
 
     if (!counselor) {
@@ -203,7 +222,7 @@ exports.assignCounselor = async (req, res) => {
     }
 
     const student = await Student.findOneAndUpdate(
-      { _id: req.params.id, companyId: companyObjectId, deletedAt: null },
+      await getScopedStudentFilter(req, { _id: req.params.id }),
       { $set: { assignedCounselor: counselor._id } },
       { new: true, runValidators: true }
     ).populate('assignedCounselor', 'name email role');

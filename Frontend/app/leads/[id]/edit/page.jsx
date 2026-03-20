@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import AppShell from '@/components/app/app-shell';
 import { ErrorState, LoadingState } from '@/components/app/shared';
 import LeadForm from '@/components/leads/lead-form';
 import { useAuth } from '@/context/AuthContext';
 import { authAPI, branchAPI, leadAPI } from '@/services/api';
+import { hasPermission } from '@/src/services/access';
 
 export default function EditLeadPage() {
   const params = useParams();
@@ -20,62 +21,76 @@ export default function EditLeadPage() {
   const [lead, setLead] = useState(null);
   const [branches, setBranches] = useState([]);
   const [counsellors, setCounsellors] = useState([]);
+  const [countryWorkflows, setCountryWorkflows] = useState([]);
 
-  useEffect(() => {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const loadPage = useCallback(async () => {
     let active = true;
+    setLoading(true);
+    setError('');
 
-    const loadPage = async () => {
-      setLoading(true);
-      setError('');
+    try {
+      const [leadResult, branchResult, userResult, workflowResult] = await Promise.allSettled([
+        leadAPI.getLeadById(leadId),
+        branchAPI.getBranches(),
+        hasPermission(user, 'leads', 'assign') ? authAPI.getUsers() : Promise.resolve(null),
+        leadAPI.getWorkflows(),
+      ]);
 
-      try {
-        const [leadResult, branchResult, userResult] = await Promise.allSettled([
-          leadAPI.getLeadById(leadId),
-          branchAPI.getBranches(),
-          ['super_admin', 'admin', 'manager'].includes(user?.role)
-            ? authAPI.getUsers('counselor')
-            : Promise.resolve(null),
-        ]);
+      if (!active) {
+        return () => {
+          active = false;
+        };
+      }
 
-        if (!active) {
-          return;
-        }
+      if (leadResult.status === 'rejected') {
+        throw leadResult.reason;
+      }
 
-        if (leadResult.status === 'rejected') {
-          throw leadResult.reason;
-        }
-
-        setLead(leadResult.value.data?.data?.lead || null);
-        setBranches(
-          branchResult.status === 'fulfilled' ? branchResult.value.data?.data || [] : []
-        );
-        setCounsellors(
-          userResult.status === 'fulfilled' ? userResult.value?.data?.data?.users || [] : []
-        );
-      } catch (requestError) {
-        if (!active) {
-          return;
-        }
+      setLead(leadResult.value.data?.data?.lead || null);
+      setBranches(branchResult.status === 'fulfilled' ? branchResult.value.data?.data || [] : []);
+      setCounsellors(
+        userResult.status === 'fulfilled' ? userResult.value?.data?.data?.users || [] : []
+      );
+      setCountryWorkflows(
+        workflowResult.status === 'fulfilled'
+          ? workflowResult.value?.data?.data?.workflows || []
+          : []
+      );
+    } catch (requestError) {
+      if (active) {
         setError(
           requestError?.response?.data?.message ||
             requestError?.message ||
             'Failed to load the lead for editing.'
         );
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
       }
-    };
-
-    if (leadId && user?.role) {
-      loadPage();
+    } finally {
+      if (active) {
+        setLoading(false);
+      }
     }
 
     return () => {
       active = false;
     };
-  }, [leadId, user?.role]);
+  }, [leadId, user]);
+
+  useEffect(() => {
+    let cleanup = () => {};
+
+    if (leadId && (user?.id || user?._id)) {
+      loadPage().then((callback) => {
+        if (typeof callback === 'function') {
+          cleanup = callback;
+        }
+      });
+    }
+
+    return () => {
+      cleanup();
+    };
+  }, [leadId, loadPage, user?.id, user?._id]);
 
   const handleSubmit = async (payload, form) => {
     setSubmitting(true);
@@ -120,6 +135,7 @@ export default function EditLeadPage() {
             <LeadForm
               branches={branches}
               counsellors={counsellors}
+              countryWorkflows={countryWorkflows}
               initialValue={lead}
               mode="edit"
               onSubmit={handleSubmit}

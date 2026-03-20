@@ -1,4 +1,31 @@
 const normalizeOrigin = (value = '') => String(value).trim().replace(/\/+$/, '');
+const DEFAULT_ALLOWED_ORIGINS = [
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:5173',
+  'http://localhost:5000',
+  'https://*.vercel.app',
+];
+
+const matchesOriginPattern = (origin, pattern) => {
+  const normalizedOrigin = normalizeOrigin(origin);
+  const normalizedPattern = normalizeOrigin(pattern);
+
+  if (!normalizedOrigin || !normalizedPattern) {
+    return false;
+  }
+
+  if (!normalizedPattern.includes('*')) {
+    return normalizedOrigin === normalizedPattern;
+  }
+
+  const escapedPattern = normalizedPattern
+    .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+    .replace(/\*/g, '.*');
+
+  return new RegExp(`^${escapedPattern}$`, 'i').test(normalizedOrigin);
+};
 
 const buildOriginList = () => {
   const configuredOrigins = [
@@ -9,11 +36,7 @@ const buildOriginList = () => {
     .map(normalizeOrigin)
     .filter(Boolean);
 
-  if (configuredOrigins.length) {
-    return [...new Set(configuredOrigins)];
-  }
-
-  return ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:5000'];
+  return [...new Set([...configuredOrigins, ...DEFAULT_ALLOWED_ORIGINS])];
 };
 
 const isOriginAllowed = (origin, allowedOrigins = buildOriginList()) => {
@@ -21,11 +44,14 @@ const isOriginAllowed = (origin, allowedOrigins = buildOriginList()) => {
     return true;
   }
 
-  return allowedOrigins.includes(normalizeOrigin(origin));
+  return allowedOrigins.some((allowedOrigin) =>
+    matchesOriginPattern(origin, allowedOrigin)
+  );
 };
 
 module.exports = {
   buildOriginList,
   isOriginAllowed,
+  matchesOriginPattern,
   normalizeOrigin,
 };

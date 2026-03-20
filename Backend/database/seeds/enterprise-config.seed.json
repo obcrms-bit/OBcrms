@@ -1,0 +1,169 @@
+{
+  "billingPlanConfigs": [
+    {
+      "code": "starter",
+      "name": "Starter",
+      "userLimit": 10,
+      "branchLimit": 1,
+      "storageLimitMb": 5120,
+      "featureFlags": ["crm", "followups", "students", "invoices", "dashboard_basic"],
+      "pricing": { "currency": "USD", "monthly": 99, "yearly": 999 }
+    },
+    {
+      "code": "growth",
+      "name": "Growth",
+      "userLimit": 50,
+      "branchLimit": 5,
+      "storageLimitMb": 20480,
+      "featureFlags": ["crm", "followups", "students", "applications", "visa", "automation", "forms", "reports"],
+      "pricing": { "currency": "USD", "monthly": 299, "yearly": 2999 }
+    },
+    {
+      "code": "enterprise",
+      "name": "Enterprise",
+      "userLimit": 500,
+      "branchLimit": 100,
+      "storageLimitMb": 102400,
+      "featureFlags": ["all_modules", "advanced_reports", "sso_ready", "api_access", "white_label"],
+      "pricing": { "currency": "USD", "monthly": 999, "yearly": 9999 }
+    }
+  ],
+  "permissions": [
+    "leads.view",
+    "leads.create",
+    "leads.edit",
+    "leads.assign",
+    "leads.convert",
+    "followups.view",
+    "followups.create",
+    "followups.complete",
+    "applications.view",
+    "applications.create",
+    "applications.edit",
+    "invoices.view",
+    "invoices.create",
+    "payments.record",
+    "universities.manage",
+    "programs.manage",
+    "automation.manage",
+    "reports.view",
+    "settings.manage",
+    "billing.manage"
+  ],
+  "roles": [
+    {
+      "code": "frontdesk",
+      "name": "Frontdesk",
+      "defaultScopes": { "leads.view": "own_branch", "followups.view": "own_branch" }
+    },
+    {
+      "code": "counsellor",
+      "name": "Counsellor",
+      "defaultScopes": { "leads.view": "assigned_to_me", "followups.complete": "assigned_to_me", "applications.view": "assigned_to_me" }
+    },
+    {
+      "code": "application_officer",
+      "name": "Application Officer",
+      "defaultScopes": { "applications.view": "own_branch", "applications.edit": "own_branch" }
+    },
+    {
+      "code": "accountant",
+      "name": "Accountant",
+      "defaultScopes": { "invoices.view": "own_branch", "payments.record": "own_branch" }
+    },
+    {
+      "code": "branch_manager",
+      "name": "Branch Manager",
+      "defaultScopes": { "leads.view": "own_branch", "applications.view": "own_branch", "reports.view": "own_branch" }
+    },
+    {
+      "code": "head_office_admin",
+      "name": "Head Office Admin",
+      "defaultScopes": { "leads.view": "tenant", "applications.view": "tenant", "billing.manage": "tenant" }
+    }
+  ],
+  "leadStages": [
+    { "serviceType": "consultancy", "code": "enquiry", "label": "Enquiry", "stageOrder": 1, "isDefault": true },
+    { "serviceType": "consultancy", "code": "counselling", "label": "Counselling", "stageOrder": 2 },
+    { "serviceType": "consultancy", "code": "documents", "label": "Documents", "stageOrder": 3 },
+    { "serviceType": "consultancy", "code": "application_ready", "label": "Application Ready", "stageOrder": 4 },
+    { "serviceType": "test_prep", "code": "new_student", "label": "New Student", "stageOrder": 1, "isDefault": true },
+    { "serviceType": "test_prep", "code": "class_started", "label": "Class Started", "stageOrder": 2 }
+  ],
+  "applicationStages": [
+    { "countryCode": "AU", "code": "enquiry", "label": "Enquiry", "stageOrder": 1 },
+    { "countryCode": "AU", "code": "counselling", "label": "Counselling", "stageOrder": 2 },
+    { "countryCode": "AU", "code": "docs", "label": "Documents", "stageOrder": 3 },
+    { "countryCode": "AU", "code": "lodge", "label": "Lodge", "stageOrder": 4 },
+    { "countryCode": "AU", "code": "visa", "label": "Visa", "stageOrder": 5 }
+  ],
+  "workflowDefinitions": [
+    {
+      "moduleKey": "application",
+      "scopeCountryCode": "AU",
+      "name": "Australia Default Workflow",
+      "versionNo": 1,
+      "stages": ["enquiry", "counselling", "docs", "lodge", "visa"],
+      "slaRules": { "firstResponseHours": 4, "followUpGapHours": 48 },
+      "automationHooks": { "stageChange": ["notify_owner", "audit_log"] }
+    }
+  ],
+  "checklists": [
+    {
+      "checklistType": "application",
+      "scopeCountryCode": "AU",
+      "name": "Australia Application Checklist",
+      "versionNo": 1,
+      "items": [
+        { "key": "passport", "label": "Passport Copy", "required": true },
+        { "key": "transcript", "label": "Academic Transcript", "required": true },
+        { "key": "english_test", "label": "IELTS/PTE Score", "required": false }
+      ]
+    }
+  ],
+  "templates": [
+    {
+      "templateType": "email",
+      "code": "followup-overdue",
+      "name": "Follow-up Overdue Reminder",
+      "subjectTemplate": "Follow-up overdue for {{lead.fullName}}",
+      "bodyTemplate": "Hello {{user.fullName}}, your follow-up for {{lead.fullName}} is overdue."
+    }
+  ],
+  "automationRules": [
+    {
+      "moduleKey": "lead",
+      "name": "Assign lead by country specialization",
+      "triggerEvent": "lead.created",
+      "conditions": [{ "field": "preferredCountries", "operator": "hasAny", "value": ["AU", "UK", "CA"] }],
+      "actions": [{ "type": "assign_counsellor_by_country_workload" }, { "type": "create_follow_up", "offsetHours": 4 }]
+    }
+  ],
+  "dashboardConfigs": [
+    {
+      "moduleKey": "crm",
+      "name": "Counsellor CRM Dashboard",
+      "layout": {
+        "cards": ["assignedLeads", "todayFollowUps", "overdueFollowUps", "conversionRate"],
+        "tables": ["pendingFollowUps", "recentActivities"]
+      }
+    }
+  ],
+  "systemSettings": [
+    {
+      "settingGroup": "finance",
+      "settingKey": "invoice_fee_types",
+      "settingValue": ["registration_fee", "application_fee", "visa_fee", "service_fee", "material_fee"]
+    },
+    {
+      "settingGroup": "crm",
+      "settingKey": "partner_categories",
+      "settingValue": ["language_center", "recruitment_partner", "training_partner", "school_partner"]
+    },
+    {
+      "settingGroup": "crm",
+      "settingKey": "intake_options",
+      "settingValue": ["January", "May", "July", "September", "November"]
+    }
+  ]
+}

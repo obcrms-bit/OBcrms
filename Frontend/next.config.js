@@ -1,4 +1,5 @@
 /** @type {import('next').NextConfig} */
+const DEFAULT_DEPLOYED_API_URL = 'https://obcrms-backend.onrender.com';
 const trimTrailingSlash = (value = '') => String(value).replace(/\/+$/, '');
 const normalizeBackendApiUrl = (value = '') => {
   const trimmed = trimTrailingSlash(value);
@@ -23,7 +24,9 @@ const normalizeBackendApiUrl = (value = '') => {
 };
 
 const backendApiUrl = normalizeBackendApiUrl(
-  process.env.NEXT_PUBLIC_API_URL || process.env.REACT_APP_API_URL || ''
+  process.env.NEXT_PUBLIC_API_URL ||
+    process.env.REACT_APP_API_URL ||
+    DEFAULT_DEPLOYED_API_URL
 );
 
 const nextConfig = {

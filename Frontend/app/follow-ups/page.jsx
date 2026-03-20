@@ -14,14 +14,12 @@ import {
 import { CompleteFollowUpModal } from '@/components/leads/follow-up-modals';
 import { useAuth } from '@/context/AuthContext';
 import { leadAPI } from '@/services/api';
+import { useLeadStore } from '@/src/stores/AppDataStore';
 import { CalendarCheck2, Clock3, RefreshCw, UserRoundCheck } from 'lucide-react';
 
 export default function FollowUpsPage() {
   const { user } = useAuth();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [followUps, setFollowUps] = useState([]);
-  const [summary, setSummary] = useState(null);
+  const [actionError, setActionError] = useState('');
   const [filters, setFilters] = useState({
     search: '',
     status: '',
@@ -29,35 +27,34 @@ export default function FollowUpsPage() {
   const [selectedItem, setSelectedItem] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [runningReminderSweep, setRunningReminderSweep] = useState(false);
+  const {
+    followUps,
+    followUpSummary: summary,
+    loadingFollowUps,
+    error: storeError,
+    loadFollowUps,
+  } = useLeadStore();
 
   const canTriggerReminderSweep = ['super_admin', 'admin', 'manager'].includes(user?.role);
 
   const loadPage = async () => {
-    setLoading(true);
-    setError('');
-
     try {
-      const [listResponse, summaryResponse] = await Promise.all([
-        leadAPI.getFollowUps({
-          ...(filters.search ? { search: filters.search } : {}),
-          ...(filters.status ? { status: filters.status } : {}),
-          limit: 100,
-        }),
-        leadAPI.getFollowUpSummary(),
-      ]);
-
-      setFollowUps(listResponse.data?.data?.followUps || []);
-      setSummary(summaryResponse.data?.data || null);
+      setActionError('');
+      await loadFollowUps({
+        ...(filters.search ? { search: filters.search } : {}),
+        ...(filters.status ? { status: filters.status } : {}),
+        limit: 100,
+      });
     } catch (requestError) {
-      setError(
+      setActionError(
         requestError?.response?.data?.message ||
           requestError?.message ||
           'Failed to load follow-up data.'
       );
-    } finally {
-      setLoading(false);
     }
   };
+
+  const error = actionError || storeError;
 
   useEffect(() => {
     if (user?.role) {
@@ -99,14 +96,14 @@ export default function FollowUpsPage() {
     }
 
     setSubmitting(true);
-    setError('');
+    setActionError('');
 
     try {
       await leadAPI.completeFollowUp(selectedItem.leadId, selectedItem._id, form);
       setSelectedItem(null);
       await loadPage();
     } catch (requestError) {
-      setError(
+      setActionError(
         requestError?.response?.data?.message ||
           requestError?.message ||
           'Failed to complete the follow-up.'
@@ -118,13 +115,13 @@ export default function FollowUpsPage() {
 
   const handleTriggerReminderSweep = async () => {
     setRunningReminderSweep(true);
-    setError('');
+    setActionError('');
 
     try {
       await leadAPI.triggerReminderSweep();
       await loadPage();
     } catch (requestError) {
-      setError(
+      setActionError(
         requestError?.response?.data?.message ||
           requestError?.message ||
           'Failed to trigger the reminder sweep.'
@@ -207,8 +204,8 @@ export default function FollowUpsPage() {
           </div>
         </section>
 
-        {loading ? <LoadingState label="Loading follow-up queue..." /> : null}
-        {!loading ? (
+        {loadingFollowUps ? <LoadingState label="Loading follow-up queue..." /> : null}
+        {!loadingFollowUps ? (
           <>
           {error ? <ErrorState message={error} onRetry={loadPage} /> : null}
           <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">

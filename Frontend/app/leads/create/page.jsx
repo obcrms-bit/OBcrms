@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AppShell from '@/components/app/app-shell';
 import { ErrorState, LoadingState } from '@/components/app/shared';
 import LeadForm from '@/components/leads/lead-form';
 import { useAuth } from '@/context/AuthContext';
 import { authAPI, branchAPI, leadAPI } from '@/services/api';
+import { hasPermission } from '@/src/services/access';
 
 export default function LeadCreatePage() {
   const router = useRouter();
@@ -16,63 +17,74 @@ export default function LeadCreatePage() {
   const [error, setError] = useState('');
   const [branches, setBranches] = useState([]);
   const [counsellors, setCounsellors] = useState([]);
+  const [countryWorkflows, setCountryWorkflows] = useState([]);
 
-  useEffect(() => {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const loadSupportData = useCallback(async () => {
     let active = true;
+    setLoading(true);
+    setError('');
 
-    const loadSupportData = async () => {
-      setLoading(true);
-      setError('');
+    try {
+      const [branchResult, userResult, workflowResult] = await Promise.allSettled([
+        branchAPI.getBranches(),
+        hasPermission(user, 'leads', 'assign') ? authAPI.getUsers() : Promise.resolve(null),
+        leadAPI.getWorkflows(),
+      ]);
 
-      try {
-        const [branchResult, userResult] = await Promise.allSettled([
-          branchAPI.getBranches(),
-          ['super_admin', 'admin', 'manager'].includes(user?.role)
-            ? authAPI.getUsers('counselor')
-            : Promise.resolve(null),
-        ]);
+      if (!active) {
+        return () => {
+          active = false;
+        };
+      }
 
-        if (!active) {
-          return;
-        }
+      setBranches(branchResult.status === 'fulfilled' ? branchResult.value.data?.data || [] : []);
+      setCounsellors(
+        userResult.status === 'fulfilled' ? userResult.value?.data?.data?.users || [] : []
+      );
+      setCountryWorkflows(
+        workflowResult.status === 'fulfilled'
+          ? workflowResult.value?.data?.data?.workflows || []
+          : []
+      );
 
-        setBranches(
-          branchResult.status === 'fulfilled' ? branchResult.value.data?.data || [] : []
-        );
-        setCounsellors(
-          userResult.status === 'fulfilled' ? userResult.value?.data?.data?.users || [] : []
-        );
-
-        if (
-          branchResult.status === 'rejected' &&
-          branchResult.reason?.response?.status !== 403
-        ) {
-          throw branchResult.reason;
-        }
-      } catch (requestError) {
-        if (!active) {
-          return;
-        }
+      if (branchResult.status === 'rejected' && branchResult.reason?.response?.status !== 403) {
+        throw branchResult.reason;
+      }
+    } catch (requestError) {
+      if (active) {
         setError(
           requestError?.response?.data?.message ||
             requestError?.message ||
             'Failed to load lead form data.'
         );
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
       }
-    };
-
-    if (user?.role) {
-      loadSupportData();
+    } finally {
+      if (active) {
+        setLoading(false);
+      }
     }
 
     return () => {
       active = false;
     };
-  }, [user?.role]);
+  }, [user]);
+
+  useEffect(() => {
+    let cleanup = () => {};
+
+    if (user?.id || user?._id) {
+      loadSupportData().then((callback) => {
+        if (typeof callback === 'function') {
+          cleanup = callback;
+        }
+      });
+    }
+
+    return () => {
+      cleanup();
+    };
+  }, [loadSupportData, user?.id, user?._id]);
 
   const handleSubmit = async (payload) => {
     setSubmitting(true);
@@ -120,6 +132,7 @@ export default function LeadCreatePage() {
           <LeadForm
             branches={branches}
             counsellors={counsellors}
+            countryWorkflows={countryWorkflows}
             mode="create"
             onSubmit={handleSubmit}
             submitLabel="Create lead"

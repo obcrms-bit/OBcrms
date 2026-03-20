@@ -31,6 +31,33 @@ const userSchema = new mongoose.Schema(
       type: String,
     },
 
+    branchId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Branch',
+      index: true,
+    },
+
+    additionalBranchIds: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Branch',
+      },
+    ],
+
+    accessibleBranchIds: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Branch',
+      },
+    ],
+
+    countries: [
+      {
+        type: String,
+        trim: true,
+      },
+    ],
+
     password: {
       type: String,
       required: [true, 'Password is required'],
@@ -42,7 +69,20 @@ const userSchema = new mongoose.Schema(
     role: {
       type: String,
       enum: {
-        values: ['super_admin', 'admin', 'manager', 'counselor', 'sales', 'accountant'],
+        values: [
+          'super_admin',
+          'admin',
+          'manager',
+          'counselor',
+          'sales',
+          'accountant',
+          'frontdesk',
+          'follow_up_team',
+          'application_officer',
+          'branch_manager',
+          'head_office_admin',
+          'agent',
+        ],
         message: 'Invalid role',
       },
       default: 'admin',
@@ -78,6 +118,39 @@ const userSchema = new mongoose.Schema(
         ],
       },
     ],
+
+    primaryRoleKey: {
+      type: String,
+      trim: true,
+      lowercase: true,
+    },
+
+    roleId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Role',
+    },
+
+    permissionBundleIds: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'PermissionBundle',
+      },
+    ],
+
+    isHeadOffice: {
+      type: Boolean,
+      default: false,
+    },
+
+    managerEnabled: {
+      type: Boolean,
+      default: false,
+    },
+
+    fieldAccessOverrides: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
 
     // Profile
     avatar: String,
@@ -148,6 +221,16 @@ const userSchema = new mongoose.Schema(
       ref: 'User',
     },
 
+    reportsTo: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
+
+    invitedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
+
     // Metadata & Timestamps
     metadata: mongoose.Schema.Types.Mixed,
 
@@ -172,6 +255,8 @@ const userSchema = new mongoose.Schema(
 // CRITICAL: Compound indexes for multi-tenancy
 userSchema.index({ companyId: 1, email: 1 }, { unique: true });
 userSchema.index({ companyId: 1, role: 1 });
+userSchema.index({ companyId: 1, branchId: 1, role: 1 });
+userSchema.index({ companyId: 1, countries: 1 });
 userSchema.index({ companyId: 1, isActive: 1 });
 userSchema.index({ companyId: 1, isOnline: 1 });
 
@@ -197,6 +282,9 @@ userSchema.methods.toJWTPayload = function () {
     email: this.email,
     name: this.name,
     role: this.role,
+    primaryRoleKey: this.primaryRoleKey || this.role,
+    branchId: this.branchId,
+    isHeadOffice: this.isHeadOffice,
     avatar: this.avatar,
   };
 };
@@ -204,6 +292,19 @@ userSchema.methods.toJWTPayload = function () {
 // Method: Check if user has permission
 userSchema.methods.hasPermission = function (resource, action) {
   if (this.role === 'super_admin') return true; // Super admin has all permissions
+
+  const effectivePermissions = this.effectiveAccess?.permissions;
+  if (Array.isArray(effectivePermissions)) {
+    const permission = effectivePermissions.find((entry) => entry.module === resource);
+    if (!permission) {
+      return false;
+    }
+    return (
+      permission.actions.includes('manage') ||
+      permission.actions.includes('full_access') ||
+      permission.actions.includes(action)
+    );
+  }
 
   const permission = this.permissions.find((p) => p.resource === resource);
   if (!permission) return false;
@@ -237,5 +338,9 @@ userSchema.methods.resetLoginAttempts = async function () {
   this.lastLogin = new Date();
   return this.save();
 };
+
+userSchema.virtual('tenantId').get(function tenantIdGetter() {
+  return this.companyId;
+});
 
 module.exports = mongoose.model('User', userSchema);

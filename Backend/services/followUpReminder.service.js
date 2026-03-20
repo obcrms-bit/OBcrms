@@ -2,6 +2,7 @@ const Lead = require('../models/Lead');
 const Notification = require('../models/Notification');
 const User = require('../models/User');
 const EmailService = require('../utils/EmailService');
+const { runAutomationEvent } = require('./automation.service');
 
 const intervalHandles = new Set();
 let isSweepRunning = false;
@@ -169,9 +170,23 @@ async function runReminderSweep() {
           continue;
         }
 
-        if (markFollowUpOverdue(lead, followUp, now)) {
+        const justMarkedOverdue = markFollowUpOverdue(lead, followUp, now);
+        if (justMarkedOverdue) {
           stats.followUpsMarkedOverdue += 1;
           leadChanged = true;
+          await runAutomationEvent({
+            companyId: lead.companyId,
+            branchId: lead.branchId,
+            triggerEvent: 'followup.missed',
+            module: 'followups',
+            target: lead,
+            actor: null,
+            context: {
+              followUpId: followUp._id,
+              scheduledAt: followUp.scheduledAt,
+              preferredCountries: lead.preferredCountries || [],
+            },
+          });
         }
 
         if (!EmailService.isConfigured() || !lead.assignedCounsellor?.email) {

@@ -2,7 +2,13 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Company = require('../models/Company');
+const Branch = require('../models/Branch');
 const { sendSuccess, sendError } = require('../utils/responseHandler');
+const { buildEffectiveAccess } = require('../services/accessControl.service');
+const {
+  ensureCompanySaaSSetup,
+  getDefaultRoleKey,
+} = require('../services/tenantProvisioning.service');
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
@@ -10,6 +16,42 @@ if (!JWT_SECRET) {
   process.exit(1);
 }
 const TOKEN_EXPIRES = '7d';
+
+const serializeAuthUser = async (user, company = null) => {
+  const branch = user.branchId
+    ? await Branch.findById(user.branchId).select('name code isHeadOffice').lean()
+    : null;
+  const effectiveAccess = await buildEffectiveAccess(user);
+
+  return {
+    id: user._id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    isSuperAdmin: user.role === 'super_admin',
+    primaryRoleKey: effectiveAccess.roleKey,
+    roleName: effectiveAccess.roleName,
+    companyId: user.companyId,
+    tenantId: user.companyId,
+    branchId: user.branchId || null,
+    branch,
+    countries: Array.isArray(user.countries) ? user.countries : [],
+    isHeadOffice: effectiveAccess.isHeadOffice,
+    managerEnabled: effectiveAccess.managerEnabled,
+    effectivePermissions: effectiveAccess.permissions,
+    fieldAccess: effectiveAccess.fieldAccess,
+    permissionBundles: effectiveAccess.bundles,
+    company: company
+      ? {
+        id: company._id,
+        name: company.name,
+        settings: company.settings,
+        subscription: company.subscription,
+      }
+      : undefined,
+    isActive: user.isActive,
+  };
+};
 
 // ==================== COMPANY REGISTRATION ====================
 // Called when a new company onboards - creates company & first admin
@@ -68,15 +110,20 @@ exports.registerCompany = async (req, res) => {
     const company = await companyModel.save();
     console.log('[registerCompany] Company saved successfully with ID:', company._id);
 
-    // Hash password & create super_admin user
+    await ensureCompanySaaSSetup(company._id);
+    const headOfficeBranch = await Branch.findOne({ companyId: company._id, isHeadOffice: true });
+
     console.log('[registerCompany] Creating admin user...');
-    // NOTE: Don't hash here - let the User pre-save hook handle it
     const user = new User({
       companyId: company._id,
+      branchId: headOfficeBranch?._id,
       name,
       email,
-      password, // Pre-save hook will hash this
-      role: 'super_admin',
+      password,
+      role: 'head_office_admin',
+      primaryRoleKey: 'head_office_admin',
+      isHeadOffice: true,
+      managerEnabled: true,
       isActive: true,
     });
 
@@ -86,8 +133,10 @@ exports.registerCompany = async (req, res) => {
 
     console.log('[registerCompany] User created, updating company owner...');
 
-    // Now update company to set the actual owner
-    await Company.findByIdAndUpdate(company._id, { owner: user._id });
+    await Company.findByIdAndUpdate(company._id, {
+      owner: user._id,
+      headOfficeBranchId: headOfficeBranch?._id,
+    });
 
     console.log('[registerCompany] Generating token...');
 
@@ -98,12 +147,14 @@ exports.registerCompany = async (req, res) => {
       { expiresIn: TOKEN_EXPIRES }
     );
 
+    const serializedUser = await serializeAuthUser(user, company);
+
     console.log('[registerCompany] SUCCESS');
 
     sendSuccess(res, 201, 'Company registered successfully', {
       token,
       company: { id: company._id, name: company.name },
-      user: { id: user._id, name: user.name, email: user.email, role: user.role },
+      user: serializedUser,
     });
   } catch (error) {
     console.error('[registerCompany] ERROR:', error);
@@ -118,7 +169,19 @@ exports.registerCompany = async (req, res) => {
 // Called by admin to add users to their company
 exports.register = async (req, res) => {
   try {
-    const { name, email, password, role, companyId: bodyCompanyId } = req.body;
+    const {
+      name,
+      email,
+      password,
+      role,
+      branchId,
+      companyId: bodyCompanyId,
+      supervisor,
+      permissionBundleIds,
+      primaryRoleKey,
+      isHeadOffice,
+      managerEnabled,
+    } = req.body;
     const companyId = req.companyId || bodyCompanyId; // Support both middleware and direct body input
 
     if (!name || !email || !password) {
@@ -141,34 +204,32 @@ exports.register = async (req, res) => {
       return sendError(res, 409, 'User with this email already exists in your company');
     }
 
-    // Normalize role to lowercase
-    const normalizedRole = role ? role.toLowerCase() : 'counselor';
+    await ensureCompanySaaSSetup(companyId);
+    const normalizedRole = role ? role.toLowerCase() : 'frontdesk';
+    const resolvedRoleKey = getDefaultRoleKey(primaryRoleKey || normalizedRole);
 
-    // Validate role
-    if (!['admin', 'manager', 'counselor', 'sales', 'accountant'].includes(normalizedRole)) {
-      return sendError(
-        res,
-        400,
-        'Invalid role. Allowed: admin, manager, counselor, sales, accountant'
-      );
-    }
-
-    // NOTE: Don't hash here - let the User pre-save hook handle it
     const user = new User({
       companyId,
+      branchId: branchId || req.user?.branchId || company.headOfficeBranchId,
       name,
       email,
-      password, // Pre-save hook will hash this
+      password,
       role: normalizedRole,
+      primaryRoleKey: resolvedRoleKey,
+      supervisor: supervisor || undefined,
+      reportsTo: supervisor || undefined,
+      permissionBundleIds: Array.isArray(permissionBundleIds) ? permissionBundleIds : [],
+      isHeadOffice: Boolean(isHeadOffice),
+      managerEnabled: Boolean(managerEnabled),
+      invitedBy: req.user?._id,
       isActive: true,
     });
     await user.save();
 
+    const serializedUser = await serializeAuthUser(user, company);
+
     sendSuccess(res, 201, 'User created successfully', {
-      id: user._id,
-      name,
-      email,
-      role: normalizedRole,
+      user: serializedUser,
     });
   } catch (error) {
     if (error.code === 11000) {
@@ -195,7 +256,11 @@ exports.login = async (req, res) => {
 
     // Verify company is active
     const company = await Company.findById(user.companyId);
-    if (!company || !company.isActive) {
+    if (!company) {
+      return sendError(res, 401, 'Company is inactive');
+    }
+
+    if (!company.isActive && user.role !== 'super_admin') {
       return sendError(res, 401, 'Company is inactive');
     }
 
@@ -210,12 +275,16 @@ exports.login = async (req, res) => {
       return sendError(res, 401, 'Invalid credentials');
     }
 
-    // Generate JWT with userId, companyId, role
+    await ensureCompanySaaSSetup(user.companyId);
+    const fullUser = await User.findById(user._id).select('-password');
+    const serializedUser = await serializeAuthUser(fullUser, company);
+
     const token = jwt.sign(
       {
         userId: user._id,
         companyId: user.companyId,
         role: user.role,
+        primaryRoleKey: fullUser.primaryRoleKey || user.role,
         email: user.email,
       },
       JWT_SECRET,
@@ -224,13 +293,7 @@ exports.login = async (req, res) => {
 
     sendSuccess(res, 200, 'Login successful', {
       token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        companyId: user.companyId,
-      },
+      user: serializedUser,
     });
   } catch (error) {
     sendError(res, 500, 'Login failed', error.message);
@@ -252,21 +315,14 @@ exports.logout = async (req, res) => {
 // Returns the authenticated user's profile
 exports.getMe = async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return sendError(res, 401, 'Authorization token missing');
-    }
-    const token = authHeader.split(' ')[1];
-
-    let decoded;
-    try {
-      decoded = jwt.verify(token, JWT_SECRET);
-    } catch (e) {
-      return sendError(res, 401, 'Invalid or expired token');
+    if (!req.user) {
+      return sendError(res, 401, 'Authentication required');
     }
 
-    const user = await User.findById(decoded.userId).select('-password');
-    if (!user) {
+    await ensureCompanySaaSSetup(req.companyId);
+    const company = await Company.findById(req.companyId);
+    const user = await User.findById(req.user._id).select('-password');
+    if (!user || !company) {
       return sendError(res, 404, 'User not found');
     }
 
@@ -274,14 +330,8 @@ exports.getMe = async (req, res) => {
       return sendError(res, 401, 'User account is inactive');
     }
 
-    sendSuccess(res, 200, 'User profile retrieved', {
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      companyId: user.companyId,
-      isActive: user.isActive,
-    });
+    const serializedUser = await serializeAuthUser(user, company);
+    sendSuccess(res, 200, 'User profile retrieved', serializedUser);
   } catch (error) {
     sendError(res, 500, 'Failed to get profile', error.message);
   }
@@ -291,22 +341,8 @@ exports.getMe = async (req, res) => {
 // Supports assignment dropdowns and internal staff directories
 exports.getCompanyUsers = async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return sendError(res, 401, 'Authorization token missing');
-    }
-
-    const token = authHeader.split(' ')[1];
-
-    let decoded;
-    try {
-      decoded = jwt.verify(token, JWT_SECRET);
-    } catch (error) {
-      return sendError(res, 401, 'Invalid or expired token');
-    }
-
     const query = {
-      companyId: decoded.companyId,
+      companyId: req.companyId,
       isActive: true,
     };
 
@@ -314,11 +350,24 @@ exports.getCompanyUsers = async (req, res) => {
       query.role = String(req.query.role).toLowerCase();
     }
 
+    if (req.query.branchId) {
+      query.branchId = req.query.branchId;
+    }
+
     const users = await User.find(query)
-      .select('name email role avatar jobTitle department isOnline lastSeen')
+      .select(
+        'name email role primaryRoleKey branchId avatar jobTitle department isOnline lastSeen isHeadOffice managerEnabled countries'
+      )
+      .populate('branchId', 'name code isHeadOffice')
       .sort({ name: 1 });
 
-    sendSuccess(res, 200, 'Company users retrieved', { users });
+    const enrichedUsers = await Promise.all(
+      users.map(async (user) => ({
+        ...(await serializeAuthUser(user)),
+      }))
+    );
+
+    sendSuccess(res, 200, 'Company users retrieved', { users: enrichedUsers });
   } catch (error) {
     sendError(res, 500, 'Failed to get company users', error.message);
   }

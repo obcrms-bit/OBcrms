@@ -2,7 +2,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import AppShell from '@/components/app/app-shell';
 import {
   CATEGORY_STYLES,
@@ -13,22 +13,29 @@ import {
   formatDate,
 } from '@/components/app/shared';
 import { leadAPI } from '@/services/api';
+import {
+  getSelectedBranchId,
+  WORKSPACE_BRANCH_EVENT,
+} from '@/src/services/workspace';
 
 export default function PipelinePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [pipeline, setPipeline] = useState({});
+  const [stages, setStages] = useState(LEAD_STAGES);
   const [dragging, setDragging] = useState(null);
   const [dragOver, setDragOver] = useState('');
   const [updatingLeadId, setUpdatingLeadId] = useState('');
+  const [selectedBranchId, setSelectedBranchId] = useState('');
 
-  const loadPipeline = async () => {
+  const loadPipeline = useCallback(async (branchId = selectedBranchId) => {
     setLoading(true);
     setError('');
 
     try {
-      const response = await leadAPI.getPipeline();
+      const response = await leadAPI.getPipeline(branchId ? { branchId } : {});
       setPipeline(response.data?.data?.pipeline || {});
+      setStages(response.data?.data?.stages || LEAD_STAGES);
     } catch (requestError: any) {
       setError(
         requestError?.response?.data?.message ||
@@ -38,11 +45,24 @@ export default function PipelinePage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedBranchId]);
 
   useEffect(() => {
-    loadPipeline();
-  }, []);
+    const initialBranchId = getSelectedBranchId();
+    setSelectedBranchId(initialBranchId);
+    loadPipeline(initialBranchId);
+
+    const handleBranchChange = (event) => {
+      const branchId = event?.detail?.branchId || '';
+      setSelectedBranchId(branchId);
+      loadPipeline(branchId);
+    };
+
+    window.addEventListener(WORKSPACE_BRANCH_EVENT, handleBranchChange);
+    return () => {
+      window.removeEventListener(WORKSPACE_BRANCH_EVENT, handleBranchChange);
+    };
+  }, [loadPipeline]);
 
   const totalLeads = useMemo(
     () =>
@@ -73,11 +93,11 @@ export default function PipelinePage() {
           current[fromStage]?.leads?.filter((item) => item._id !== lead._id) || [],
         count: Math.max((current[fromStage]?.count || 1) - 1, 0),
       };
-      nextState[targetStage] = {
-        ...(current[targetStage] || {}),
-        leads: [{ ...lead, status: targetStage }, ...(current[targetStage]?.leads || [])],
-        count: (current[targetStage]?.count || 0) + 1,
-      };
+              nextState[targetStage] = {
+                ...(current[targetStage] || {}),
+                leads: [{ ...lead, status: targetStage }, ...(current[targetStage]?.leads || [])],
+                count: (current[targetStage]?.count || 0) + 1,
+              };
 
       return nextState;
     });
@@ -128,16 +148,16 @@ export default function PipelinePage() {
               Pipeline Summary
             </p>
             <h3 className="mt-2 text-2xl font-semibold text-slate-900">
-              {totalLeads} leads across {LEAD_STAGES.length} stages
+              {totalLeads} leads across {stages.length} stages
             </h3>
           </div>
 
           <div className="overflow-x-auto">
             <div
               className="flex gap-4 pb-3"
-              style={{ minWidth: `${LEAD_STAGES.length * 280}px` }}
+              style={{ minWidth: `${stages.length * 280}px` }}
             >
-              {LEAD_STAGES.map((stage) => {
+              {stages.map((stage) => {
                 const stageData = pipeline[stage.key] || { count: 0, leads: [] };
                 const isDragTarget = dragOver === stage.key;
 

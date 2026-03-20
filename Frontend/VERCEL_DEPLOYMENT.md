@@ -14,12 +14,12 @@ Deploy the `Frontend` directory as the Vercel project root.
 
 Set these in the Vercel project before deploying:
 
-- `NEXT_PUBLIC_API_URL=https://your-backend-url.onrender.com/api`
+- `NEXT_PUBLIC_API_URL=https://obcrms-backend.onrender.com/api`
 
 Optional:
 
 - `NEXT_PUBLIC_APP_NAME=Trust Education CRM`
-- `REACT_APP_API_URL=https://your-backend-url.onrender.com/api`
+- `REACT_APP_API_URL=https://obcrms-backend.onrender.com/api`
 
 `NEXT_PUBLIC_API_URL` is the deployment standard for this Next.js app. `REACT_APP_API_URL` is only kept as a compatibility alias.
 

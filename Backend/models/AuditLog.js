@@ -10,6 +10,12 @@ const auditLogSchema = new mongoose.Schema(
       index: true,
     },
 
+    branchId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Branch',
+      index: true,
+    },
+
     // User Info
     userId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -26,19 +32,33 @@ const auditLogSchema = new mongoose.Schema(
     // Action Details
     action: {
       type: String,
-      enum: ['create', 'update', 'delete', 'export', 'login', 'logout'],
       required: true,
+      trim: true,
+      index: true,
+    },
+
+    actionType: {
+      type: String,
+      trim: true,
       index: true,
     },
 
     resource: {
       type: String,
-      enum: ['student', 'user', 'lead', 'application', 'report', 'company', 'settings', 'invoice'],
       required: true,
+      trim: true,
+      index: true,
+    },
+
+    module: {
+      type: String,
+      trim: true,
       index: true,
     },
 
     resourceId: mongoose.Schema.Types.ObjectId,
+
+    targetId: mongoose.Schema.Types.ObjectId,
 
     resourceName: String, // e.g., "John Doe", "Email Report"
 
@@ -75,10 +95,11 @@ const auditLogSchema = new mongoose.Schema(
 );
 
 // TTL Index: Auto-delete audit logs after 90 days
-auditLogSchema.index({ createdAt: 1 }, { expireAfterSeconds: 7776000 });
+auditLogSchema.index({ createdAt: 1 }, { expireAfterSeconds: 31536000 });
 
 // Performance indexes
 auditLogSchema.index({ companyId: 1, createdAt: -1 });
+auditLogSchema.index({ companyId: 1, branchId: 1, createdAt: -1 });
 auditLogSchema.index({ companyId: 1, userId: 1, createdAt: -1 });
 auditLogSchema.index({ companyId: 1, action: 1 });
 auditLogSchema.index({ companyId: 1, resource: 1 });
@@ -92,8 +113,12 @@ auditLogSchema.statics.logAction = async function (
     userEmail,
     userRole,
     action,
+    actionType,
     resource,
+    module,
+    branchId,
     resourceId,
+    targetId,
     resourceName,
     changes,
     ipAddress,
@@ -111,8 +136,12 @@ auditLogSchema.statics.logAction = async function (
       userEmail,
       userRole,
       action,
+      actionType,
       resource,
+      module,
+      branchId,
       resourceId,
+      targetId,
       resourceName,
       changes,
       ipAddress,

@@ -9,7 +9,7 @@ The React frontend provides two separate dashboards:
 
 ### Prerequisites
 - Node.js v16+ and npm
-- Backend server running on `http://localhost:5000`
+- Backend server running on `https://obcrms-backend.onrender.com`
 
 ### Steps
 
@@ -26,7 +26,7 @@ The React frontend provides two separate dashboards:
 3. **Create environment file** (already created as `.env.local`)
    The file contains:
    ```
-   REACT_APP_API_URL=http://localhost:5000/api
+   NEXT_PUBLIC_API_URL=https://obcrms-backend.onrender.com/api
    ```
 
 4. **Start development server**
@@ -107,7 +107,7 @@ If you prefer to create individual accounts manually:
 
 **Register Admin:**
 ```
-POST http://localhost:5000/api/auth/register
+POST https://obcrms-backend.onrender.com/api/auth/register
 Content-Type: application/json
 
 {
@@ -120,7 +120,7 @@ Content-Type: application/json
 
 **Register Counselor:**
 ```
-POST http://localhost:5000/api/auth/register
+POST https://obcrms-backend.onrender.com/api/auth/register
 Content-Type: application/json
 
 {
@@ -244,7 +244,7 @@ The application uses CSS Grid and Flexbox for responsive layout with:
 
 ### "Network Error" when logging in
 - Ensure backend is running on port 5000
-- Check REACT_APP_API_URL in `.env.local`
+- Check `NEXT_PUBLIC_API_URL` in `.env.local`
 - Verify MongoDB is connected
 
 ### "Invalid token" errors

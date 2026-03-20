@@ -6,6 +6,18 @@ const PDFService = require('../utils/PDFService');
 const EmailService = require('../utils/EmailService');
 const { sendSuccess, sendError } = require('../utils/responseHandler');
 const mongoose = require('mongoose');
+const { buildScopedClause, mergeFiltersWithAnd } = require('../services/accessControl.service');
+
+const getScopedInvoiceFilter = async (req, extra = {}) =>
+  mergeFiltersWithAnd(
+    { companyId: new mongoose.Types.ObjectId(req.companyId) },
+    await buildScopedClause(req.user, 'accounting', {
+      branchField: 'branchId',
+      creatorFields: ['createdByUser'],
+      ownerFields: [],
+    }),
+    extra
+  );
 
 exports.createInvoice = async (req, res) => {
   try {
@@ -30,6 +42,8 @@ exports.createInvoice = async (req, res) => {
 
     const invoice = await Invoice.create({
       companyId: req.companyId,
+      branchId: student.branchId,
+      createdByUser: req.user?._id,
       studentId,
       applicantId,
       invoiceNumber,
@@ -62,8 +76,7 @@ exports.createInvoice = async (req, res) => {
 exports.sendInvoiceEmail = async (req, res) => {
   try {
     const { id } = req.params;
-    const companyObjectId = new mongoose.Types.ObjectId(req.companyId);
-    const invoice = await Invoice.findOne({ _id: id, companyId: companyObjectId }).populate(
+    const invoice = await Invoice.findOne(await getScopedInvoiceFilter(req, { _id: id })).populate(
       'studentId'
     );
     if (!invoice) return sendError(res, 404, 'Invoice not found');
@@ -112,8 +125,7 @@ exports.sendInvoiceEmail = async (req, res) => {
 
 exports.getInvoices = async (req, res) => {
   try {
-    const companyObjectId = new mongoose.Types.ObjectId(req.companyId);
-    const invoices = await Invoice.find({ companyId: companyObjectId })
+    const invoices = await Invoice.find(await getScopedInvoiceFilter(req))
       .populate('studentId')
       .sort({ createdAt: -1 });
     return sendSuccess(res, 200, 'Invoices retrieved successfully', invoices);
@@ -126,9 +138,7 @@ exports.updateInvoiceStatus = async (req, res) => {
   try {
     const { id } = req.params;
     const { status, paymentMethod } = req.body;
-    const companyObjectId = new mongoose.Types.ObjectId(req.companyId);
-
-    const invoice = await Invoice.findOne({ _id: id, companyId: companyObjectId });
+    const invoice = await Invoice.findOne(await getScopedInvoiceFilter(req, { _id: id }));
     if (!invoice) return sendError(res, 404, 'Invoice not found');
 
     const oldStatus = invoice.status;

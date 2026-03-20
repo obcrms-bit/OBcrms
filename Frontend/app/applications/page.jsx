@@ -8,7 +8,34 @@ import {
   LoadingState,
   StatusPill,
 } from '@/components/app/shared';
-import { applicantAPI } from '@/services/api';
+import { applicationAPI } from '@/services/api';
+
+const DEFAULT_APPLICATION_STAGES = [
+  'draft',
+  'submitted',
+  'offer_received',
+  'visa_applied',
+  'enrolled',
+  'rejected',
+];
+
+const getStageOptions = (application) => {
+  const workflowStages = Array.isArray(application?.countryWorkflowId?.applicationStages)
+    ? application.countryWorkflowId.applicationStages
+    : [];
+
+  if (!workflowStages.length) {
+    return DEFAULT_APPLICATION_STAGES.map((stage) => ({
+      value: stage,
+      label: stage.replace(/_/g, ' '),
+    }));
+  }
+
+  return workflowStages.map((stage) => ({
+    value: stage?.key || stage?.value || '',
+    label: stage?.label || String(stage?.key || stage?.value || '').replace(/_/g, ' '),
+  }));
+};
 
 export default function ApplicationsPage() {
   const [loading, setLoading] = useState(true);
@@ -20,7 +47,7 @@ export default function ApplicationsPage() {
     setError('');
 
     try {
-      const response = await applicantAPI.getApplications();
+      const response = await applicationAPI.list();
       setApplications(response.data?.data || []);
     } catch (requestError) {
       setError(
@@ -39,7 +66,7 @@ export default function ApplicationsPage() {
 
   const updateStatus = async (applicationId, status) => {
     try {
-      await applicantAPI.updateStatus(applicationId, status);
+      await applicationAPI.changeStage(applicationId, status);
       await loadApplications();
     } catch (requestError) {
       setError(
@@ -93,7 +120,7 @@ export default function ApplicationsPage() {
                     <tr key={application._id}>
                       <td className="py-4">
                         <div className="font-semibold text-slate-900">
-                          {application.studentId?.fullName || 'Unknown student'}
+                          {application.studentId?.fullName || application.studentId?.name || 'Unknown student'}
                         </div>
                         <div className="text-sm text-slate-500">
                           {application.country || 'Country not set'}
@@ -118,9 +145,9 @@ export default function ApplicationsPage() {
                           }
                           value={application.status}
                         >
-                          {['draft', 'submitted', 'offer-received', 'visa-applied', 'enrolled', 'rejected'].map((status) => (
-                            <option key={status} value={status}>
-                              {status}
+                          {getStageOptions(application).map((stage) => (
+                            <option key={stage.value} value={stage.value}>
+                              {stage.label}
                             </option>
                           ))}
                         </select>

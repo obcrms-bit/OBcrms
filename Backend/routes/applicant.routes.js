@@ -1,15 +1,15 @@
 const express = require('express');
 const router = express.Router();
 const applicantController = require('../controllers/applicant.controller');
-const { protect, restrict } = require('../middleware/AuthMiddleware');
+const { protect, requirePermission } = require('../middleware/AuthMiddleware');
 
 router.use(protect);
 
-router.get('/', restrict('admin', 'manager', 'counselor'), applicantController.getApplications);
-router.post('/', restrict('admin', 'manager', 'counselor'), applicantController.createApplication);
+router.get('/', requirePermission('applications', 'view'), applicantController.getApplications);
+router.post('/', requirePermission('applications', 'create'), applicantController.createApplication);
 router.patch(
   '/:id/status',
-  restrict('admin', 'manager', 'counselor'),
+  requirePermission('applications', 'edit'),
   applicantController.updateApplicationStatus
 );
 

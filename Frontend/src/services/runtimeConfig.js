@@ -1,5 +1,6 @@
 'use client';
 
+const DEFAULT_DEPLOYED_API_URL = 'https://obcrms-backend.onrender.com';
 const trimTrailingSlash = (value = '') => String(value).replace(/\/+$/, '');
 const hasApiSuffix = (value = '') => /\/api$/i.test(value);
 
@@ -33,7 +34,11 @@ export const getApiBaseUrl = () => {
   const configuredUrl =
     process.env.NEXT_PUBLIC_API_URL || process.env.REACT_APP_API_URL || '';
 
-  return normalizeConfiguredApiUrl(configuredUrl) || '/api';
+  return (
+    normalizeConfiguredApiUrl(configuredUrl) ||
+    normalizeConfiguredApiUrl(DEFAULT_DEPLOYED_API_URL) ||
+    '/api'
+  );
 };
 
 export const getSocketBaseUrl = () =>

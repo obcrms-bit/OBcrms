@@ -20,12 +20,12 @@ npm start
 In Vercel Dashboard, add these environment variables:
 
 ```
-NEXT_PUBLIC_API_URL=https://your-backend-api.com/api
+NEXT_PUBLIC_API_URL=https://obcrms-backend.onrender.com/api
 NEXT_PUBLIC_APP_NAME=Trust Education CRM
 NODE_ENV=production
 ```
 
-Note: Update `https://your-backend-api.com/api` with your actual backend API URL
+This project should point at `https://obcrms-backend.onrender.com/api` unless you intentionally change the deployed backend.
 
 ### 3. **Deploy to Vercel**
 

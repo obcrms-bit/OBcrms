@@ -75,6 +75,12 @@ const activitySchema = new mongoose.Schema(
         'reminder_failed',
         'note_added',
         'converted_to_student',
+        'transfer_requested',
+        'transfer_approved',
+        'transfer_rejected',
+        'transfer_completed',
+        'ownership_locked',
+        'ownership_unlocked',
         'communication_logged',
         'score_updated',
         'document_uploaded',
@@ -188,6 +194,23 @@ const leadSchema = new mongoose.Schema(
       index: true,
     },
     branchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Branch', index: true },
+    createdByUser: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
+    createdByAgentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Agent', index: true },
+    ownerUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
+    sharedWithBranchIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Branch' }],
+
+    serviceType: {
+      type: String,
+      enum: ['consultancy', 'test_prep'],
+      default: 'consultancy',
+      index: true,
+    },
+    entityType: {
+      type: String,
+      enum: ['client', 'student'],
+      default: 'client',
+      index: true,
+    },
 
     firstName: { type: String, required: [true, 'First name is required'], trim: true },
     lastName: { type: String, trim: true, default: '' },
@@ -225,6 +248,16 @@ const leadSchema = new mongoose.Schema(
         'other',
       ],
       default: 'website',
+    },
+    sourceType: {
+      type: String,
+      enum: ['website_form', 'website_widget', 'qr_form', 'manual_entry', 'agent_portal', 'import', 'api'],
+      default: 'manual_entry',
+      index: true,
+    },
+    sourceMeta: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
     },
     campaign: { type: String, trim: true },
     branchName: { type: String, trim: true },
@@ -264,13 +297,11 @@ const leadSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: PIPELINE_STATUSES,
       default: 'new',
       index: true,
     },
     pipelineStage: {
       type: String,
-      enum: PIPELINE_STATUSES,
       default: 'new',
       index: true,
     },
@@ -307,6 +338,36 @@ const leadSchema = new mongoose.Schema(
     convertedToStudent: { type: Boolean, default: false },
     studentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Student' },
     convertedAt: { type: Date },
+
+    ownershipLocked: { type: Boolean, default: false, index: true },
+    ownershipLockedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    ownershipLockedAt: { type: Date },
+    ownershipLockReason: { type: String, trim: true },
+    transferHistory: {
+      type: [
+        {
+          fromBranchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Branch' },
+          toBranchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Branch' },
+          transferredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+          transferDate: { type: Date, default: Date.now },
+          reason: { type: String, trim: true },
+          approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+          status: {
+            type: String,
+            enum: ['pending', 'approved', 'rejected', 'completed'],
+            default: 'completed',
+          },
+        },
+      ],
+      default: [],
+    },
+    slaMetrics: {
+      firstResponseMinutes: { type: Number, default: null },
+      firstFollowUpMinutes: { type: Number, default: null },
+      overdueFollowUpCount: { type: Number, default: 0 },
+      agingDays: { type: Number, default: 0 },
+      lastCalculatedAt: { type: Date },
+    },
 
     deletedAt: { type: Date, default: null },
 
@@ -363,6 +424,12 @@ leadSchema.pre('save', function syncLegacyFields(next) {
   if (this.assignedTo && !this.assignedCounsellor) {
     this.assignedCounsellor = this.assignedTo;
   }
+  if (this.assignedCounsellor && !this.ownerUserId) {
+    this.ownerUserId = this.assignedCounsellor;
+  }
+  if (!this.ownerUserId && this.createdByUser) {
+    this.ownerUserId = this.createdByUser;
+  }
 
   if (this.courseLevel && !this.preferredStudyLevel) {
     this.preferredStudyLevel = this.courseLevel;
@@ -381,12 +448,49 @@ leadSchema.pre('save', function syncLegacyFields(next) {
   this.pipelineStage = this.status || this.pipelineStage || 'new';
   this.status = this.pipelineStage;
   this.stage = mapPipelineStatusToStage(this.status);
+  this.entityType = this.serviceType === 'test_prep' ? 'student' : 'client';
 
   const nextPendingFollowUp = (this.followUps || [])
     .filter((item) => ['pending', 'overdue'].includes(item.status))
     .sort((left, right) => new Date(left.scheduledAt) - new Date(right.scheduledAt))[0];
 
   this.nextFollowUp = nextPendingFollowUp ? nextPendingFollowUp.scheduledAt : null;
+
+  const firstScheduledFollowUp = (this.followUps || [])
+    .slice()
+    .sort((left, right) => new Date(left.scheduledAt) - new Date(right.scheduledAt))[0];
+  const firstCompletedFollowUp = (this.followUps || [])
+    .filter((item) => item.completedAt)
+    .sort((left, right) => new Date(left.completedAt) - new Date(right.completedAt))[0];
+  const overdueFollowUpCount = (this.followUps || []).filter((item) => item.status === 'overdue').length;
+
+  this.slaMetrics = {
+    ...(this.slaMetrics || {}),
+    firstResponseMinutes:
+      this.createdAt && firstCompletedFollowUp?.completedAt
+        ? Math.round(
+          (new Date(firstCompletedFollowUp.completedAt).getTime() -
+              new Date(this.createdAt).getTime()) /
+              60000
+        )
+        : this.slaMetrics?.firstResponseMinutes ?? null,
+    firstFollowUpMinutes:
+      this.createdAt && firstScheduledFollowUp?.scheduledAt
+        ? Math.round(
+          (new Date(firstScheduledFollowUp.scheduledAt).getTime() -
+              new Date(this.createdAt).getTime()) /
+              60000
+        )
+        : this.slaMetrics?.firstFollowUpMinutes ?? null,
+    overdueFollowUpCount,
+    agingDays: this.createdAt
+      ? Math.max(
+        0,
+        Math.floor((Date.now() - new Date(this.createdAt).getTime()) / (24 * 60 * 60 * 1000))
+      )
+      : 0,
+    lastCalculatedAt: new Date(),
+  };
 
   next();
 });
@@ -402,6 +506,9 @@ leadSchema.index({ companyId: 1, stage: 1 });
 leadSchema.index({ companyId: 1, leadScore: -1 });
 leadSchema.index({ companyId: 1, nextFollowUp: 1 });
 leadSchema.index({ companyId: 1, assignedCounsellor: 1 });
+leadSchema.index({ companyId: 1, branchId: 1, assignedCounsellor: 1 });
+leadSchema.index({ companyId: 1, serviceType: 1, entityType: 1 });
+leadSchema.index({ companyId: 1, ownershipLocked: 1 });
 leadSchema.index({ companyId: 1, createdAt: -1 });
 leadSchema.index({
   firstName: 'text',

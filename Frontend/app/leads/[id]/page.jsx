@@ -19,6 +19,7 @@ import {
 } from '@/components/leads/follow-up-modals';
 import { useAuth } from '@/context/AuthContext';
 import { authAPI, leadAPI } from '@/services/api';
+import { getEntityLabel, hasPermission } from '@/src/services/access';
 
 const LEAD_STATUSES = [
   'new',
@@ -63,6 +64,8 @@ export default function LeadDetailPage() {
   const [error, setError] = useState('');
   const [lead, setLead] = useState(null);
   const [counsellors, setCounsellors] = useState([]);
+  const [workflow, setWorkflow] = useState(null);
+  const [workflowStages, setWorkflowStages] = useState([]);
   const [activeTab, setActiveTab] = useState('overview');
   const [actionLoading, setActionLoading] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState('');
@@ -72,7 +75,8 @@ export default function LeadDetailPage() {
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [selectedFollowUp, setSelectedFollowUp] = useState(null);
 
-  const canAssign = ['super_admin', 'admin', 'manager'].includes(user?.role);
+  const canAssign = hasPermission(user, 'leads', 'assign');
+  const entityLabel = getEntityLabel(lead, 'Client');
 
   const loadLead = async () => {
     setLoading(true);
@@ -81,13 +85,17 @@ export default function LeadDetailPage() {
     try {
       const requests = [leadAPI.getLeadById(leadId)];
       if (canAssign) {
-        requests.push(authAPI.getUsers('counselor'));
+        requests.push(authAPI.getUsers());
       }
 
       const results = await Promise.all(requests);
       const nextLead = results[0].data?.data?.lead || null;
+      const nextWorkflow = results[0].data?.data?.workflow || null;
+      const nextWorkflowStages = results[0].data?.data?.workflowStages || [];
 
       setLead(nextLead);
+      setWorkflow(nextWorkflow);
+      setWorkflowStages(nextWorkflowStages);
       setSelectedStatus(nextLead?.status || '');
       setSelectedCounsellorId(nextLead?.assignedCounsellor?._id || '');
       setCounsellors(canAssign ? results[1]?.data?.data?.users || [] : []);
@@ -203,8 +211,8 @@ export default function LeadDetailPage() {
 
   return (
     <AppShell
-      title={lead ? lead.fullName || lead.name : 'Lead Detail'}
-      description="Review the full lead profile, activity timeline, follow-up history, assignment, and conversion workflow in one place."
+      title={lead ? `${entityLabel} Profile` : 'Lead Detail'}
+      description="Review the full pipeline profile, activity timeline, follow-up history, assignment, and conversion workflow in one place."
       actions={
         <>
           <Link
@@ -238,10 +246,11 @@ export default function LeadDetailPage() {
           <aside className="space-y-6">
             <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
               <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h3 className="text-2xl font-semibold text-slate-900">{lead.fullName || lead.name}</h3>
-                  <p className="mt-2 text-sm text-slate-500">{lead.email || 'No email'}</p>
-                </div>
+                  <div>
+                    <h3 className="text-2xl font-semibold text-slate-900">{lead.fullName || lead.name}</h3>
+                    <p className="mt-2 text-sm text-slate-500">{lead.email || 'No email'}</p>
+                    <p className="mt-1 text-sm font-medium text-teal-700">{entityLabel}</p>
+                  </div>
                 <StatusPill tone={lead.status}>{String(lead.status).replace(/_/g, ' ')}</StatusPill>
               </div>
 
@@ -303,9 +312,15 @@ export default function LeadDetailPage() {
                     value={selectedStatus}
                     onChange={(event) => setSelectedStatus(event.target.value)}
                   >
-                    {LEAD_STATUSES.map((status) => (
-                      <option key={status} value={status}>
-                        {status.replace(/_/g, ' ')}
+                    {(workflowStages.length
+                      ? workflowStages
+                      : LEAD_STATUSES.map((status) => ({
+                          key: status,
+                          label: status.replace(/_/g, ' '),
+                        }))
+                    ).map((stage) => (
+                      <option key={stage.key} value={stage.key}>
+                        {stage.label}
                       </option>
                     ))}
                   </select>
@@ -356,6 +371,24 @@ export default function LeadDetailPage() {
 
             <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                Country Workflow
+              </p>
+              <div className="mt-4 space-y-3 text-sm text-slate-600">
+                <p>
+                  Preferred countries:{' '}
+                  {lead.preferredCountries?.length ? lead.preferredCountries.join(', ') : 'Not set'}
+                </p>
+                <p>Workflow country: {workflow?.country || 'Tenant default workflow'}</p>
+                <p>
+                  Stages:{' '}
+                  {(workflowStages || []).map((stage) => stage.label).join(' -> ') ||
+                    'Not configured'}
+                </p>
+              </div>
+            </section>
+
+            <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
                 Quick Actions
               </p>
               <div className="mt-4 grid gap-3">
@@ -381,11 +414,11 @@ export default function LeadDetailPage() {
                     onClick={handleConvert}
                     type="button"
                   >
-                    Convert to student
+                    Convert to {entityLabel.toLowerCase()}
                   </button>
                 ) : (
                   <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
-                    Converted to student on {formatDate(lead.convertedAt)}
+                    Converted to {entityLabel.toLowerCase()} on {formatDate(lead.convertedAt)}
                   </div>
                 )}
               </div>
@@ -450,6 +483,12 @@ export default function LeadDetailPage() {
                     { label: 'Course Level', value: lead.courseLevel || lead.preferredStudyLevel },
                     { label: 'Preferred Location', value: lead.preferredLocation },
                     { label: 'Interested Course', value: lead.interestedCourse },
+                    {
+                      label: 'Preferred Countries',
+                      value: lead.preferredCountries?.length
+                        ? lead.preferredCountries.join(', ')
+                        : '',
+                    },
                   ]}
                 />
 

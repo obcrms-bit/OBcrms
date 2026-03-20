@@ -18,6 +18,19 @@ const agentSchema = new mongoose.Schema({
     trim: true,
   },
   phone: String,
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+  },
+  branchId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Branch',
+    index: true,
+  },
+  portalAccessEnabled: {
+    type: Boolean,
+    default: true,
+  },
   commissionRate: {
     type: Number,
     default: 0,
@@ -28,6 +41,10 @@ const agentSchema = new mongoose.Schema({
     type: Boolean,
     default: true,
   },
+  metadata: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {},
+  },
   createdAt: {
     type: Date,
     default: Date.now,
@@ -37,5 +54,8 @@ const agentSchema = new mongoose.Schema({
     default: Date.now,
   },
 });
+
+agentSchema.index({ companyId: 1, userId: 1 }, { sparse: true });
+agentSchema.index({ companyId: 1, email: 1 });
 
 module.exports = mongoose.model('Agent', agentSchema);

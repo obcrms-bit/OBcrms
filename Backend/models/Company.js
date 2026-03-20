@@ -138,8 +138,42 @@ const companySchema = new mongoose.Schema(
         type: String,
         default: '#667eea',
       },
+      secondaryColor: {
+        type: String,
+        default: '#0f172a',
+      },
+      accentColor: {
+        type: String,
+        default: '#14b8a6',
+      },
+      fontFamily: {
+        type: String,
+        default: 'Inter',
+      },
+      loginHeading: {
+        type: String,
+        default: 'Sign in to your education operations workspace',
+      },
+      loginSubheading: {
+        type: String,
+        default: 'Manage counselling, applications, billing, and branch operations from one tenant-safe CRM.',
+      },
+      supportEmail: String,
       allowCustomDomain: Boolean,
       customDomain: String,
+      transferApprovalRequired: {
+        type: Boolean,
+        default: false,
+      },
+      branchVisibilityMode: {
+        type: String,
+        enum: ['isolated', 'shared'],
+        default: 'isolated',
+      },
+      entityNaming: {
+        consultancyLabel: { type: String, default: 'Client' },
+        testPrepLabel: { type: String, default: 'Student' },
+      },
     },
 
     // Billing and Payment
@@ -156,6 +190,24 @@ const companySchema = new mongoose.Schema(
       cardExpiryMonth: Number,
       cardExpiryYear: Number,
       invoicePrefix: String,
+      nextBillingDate: Date,
+      paymentHistory: [
+        {
+          amount: Number,
+          currency: { type: String, default: 'USD' },
+          status: {
+            type: String,
+            enum: ['draft', 'due', 'paid', 'failed', 'void'],
+            default: 'draft',
+          },
+          invoiceNumber: String,
+          providerInvoiceId: String,
+          hostedInvoiceUrl: String,
+          dueAt: Date,
+          paidAt: Date,
+          notes: String,
+        },
+      ],
     },
 
     // Usage Tracking
@@ -204,6 +256,11 @@ const companySchema = new mongoose.Schema(
       ref: 'User',
       required: false,
       // The user who created/owns this company
+    },
+
+    headOfficeBranchId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Branch',
     },
 
     // Audit & Compliance
@@ -255,6 +312,10 @@ companySchema.pre('save', function () {
 // Virtual: Formatted companyId
 companySchema.virtual('displayName').get(function () {
   return `${this.name} (${this.companyId})`;
+});
+
+companySchema.virtual('tenantId').get(function tenantIdGetter() {
+  return this._id;
 });
 
 // Method: Check if company has feature

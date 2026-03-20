@@ -21,52 +21,69 @@ import {
 } from '@/components/app/shared';
 import { CompleteFollowUpModal } from '@/components/leads/follow-up-modals';
 import { useAuth } from '@/context/AuthContext';
-import { dashboardAPI, leadAPI } from '@/services/api';
+import { leadAPI } from '@/services/api';
+import { hasPermission, normalizeRoleKey } from '@/src/services/access';
+import { useDashboardStore } from '@/src/stores/AppDataStore';
+import {
+  getSelectedBranchId,
+  WORKSPACE_BRANCH_EVENT,
+} from '@/src/services/workspace';
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [summary, setSummary] = useState(null);
-  const [stats, setStats] = useState(null);
+  const [actionError, setActionError] = useState('');
   const [selectedFollowUp, setSelectedFollowUp] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [selectedBranchId, setSelectedBranchId] = useState('');
+  const {
+    summary,
+    stats,
+    loadingDashboard,
+    error: storeError,
+    loadDashboard: loadDashboardStore,
+  } = useDashboardStore();
 
-  const canViewTeamPanels = ['super_admin', 'admin', 'manager'].includes(user?.role);
+  const canViewTeamPanels =
+    user?.isHeadOffice ||
+    ['head_office_admin', 'branch_manager', 'super_admin', 'admin', 'manager'].includes(
+      normalizeRoleKey(user)
+    ) ||
+    hasPermission(user, 'dashboards', 'manage');
 
-  const loadDashboard = async () => {
-    setLoading(true);
-    setError('');
-
+  const loadDashboard = async (branchId = selectedBranchId) => {
     try {
-      const [summaryResponse, statsResponse] = await Promise.allSettled([
-        leadAPI.getFollowUpSummary(),
-        canViewTeamPanels ? dashboardAPI.getDashboardStats() : Promise.resolve(null),
-      ]);
-
-      if (summaryResponse.status === 'rejected') {
-        throw summaryResponse.reason;
-      }
-
-      setSummary(summaryResponse.value.data?.data || null);
-      setStats(
-        statsResponse.status === 'fulfilled' ? statsResponse.value?.data?.data || null : null
-      );
+      setActionError('');
+      await loadDashboardStore(branchId ? { branchId } : {}, canViewTeamPanels);
     } catch (requestError) {
-      setError(
+      setActionError(
         requestError?.response?.data?.message ||
           requestError?.message ||
           'Failed to load the dashboard.'
       );
-    } finally {
-      setLoading(false);
     }
   };
 
+  const error = actionError || storeError;
+
   useEffect(() => {
+    const initialBranchId = getSelectedBranchId();
+    setSelectedBranchId(initialBranchId);
     if (user?.role) {
-      loadDashboard();
+      loadDashboard(initialBranchId);
     }
+
+    const handleBranchChange = (event) => {
+      const branchId = event?.detail?.branchId || '';
+      setSelectedBranchId(branchId);
+      if (user?.role) {
+        loadDashboard(branchId);
+      }
+    };
+
+    window.addEventListener(WORKSPACE_BRANCH_EVENT, handleBranchChange);
+    return () => {
+      window.removeEventListener(WORKSPACE_BRANCH_EVENT, handleBranchChange);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.role]);
 
@@ -100,8 +117,33 @@ export default function DashboardPage() {
         icon: CheckCircle2,
         accent: 'bg-emerald-500',
       },
+      ...(canViewTeamPanels
+        ? [
+            {
+              label: 'Branches',
+              value: stats?.totalBranches || 0,
+              helper: 'Active tenant branches',
+              icon: Users,
+              accent: 'bg-slate-700',
+            },
+            {
+              label: 'Transfers Pending',
+              value: stats?.pendingTransfers || 0,
+              helper: 'Awaiting branch approval',
+              icon: AlertCircle,
+              accent: 'bg-fuchsia-500',
+            },
+            {
+              label: 'Commissions Pending',
+              value: stats?.pendingCommissions || 0,
+              helper: 'Agent payouts awaiting review',
+              icon: ClipboardList,
+              accent: 'bg-amber-600',
+            },
+          ]
+        : []),
     ],
-    [summary]
+    [canViewTeamPanels, stats, summary]
   );
 
   const handleCompleteFollowUp = async (form) => {
@@ -110,14 +152,14 @@ export default function DashboardPage() {
     }
 
     setSubmitting(true);
-    setError('');
+    setActionError('');
 
     try {
       await leadAPI.completeFollowUp(selectedFollowUp.leadId, selectedFollowUp._id, form);
       setSelectedFollowUp(null);
       await loadDashboard();
     } catch (requestError) {
-      setError(
+      setActionError(
         requestError?.response?.data?.message ||
           requestError?.message ||
           'Failed to complete the follow-up.'
@@ -202,15 +244,15 @@ export default function DashboardPage() {
         </button>
       }
     >
-      {loading ? <LoadingState label="Loading dashboard..." /> : null}
+      {loadingDashboard ? <LoadingState label="Loading dashboard..." /> : null}
 
-      {!loading ? (
+      {!loadingDashboard ? (
         <div className="space-y-8">
           {error ? <ErrorState message={error} onRetry={loadDashboard} /> : null}
 
           {summary ? (
             <>
-              <div className="grid gap-4 xl:grid-cols-4">
+              <div className="grid gap-4 xl:grid-cols-4 2xl:grid-cols-7">
                 {cards.map((card) => (
                   <MetricCard
                     key={card.label}
@@ -449,6 +491,82 @@ export default function DashboardPage() {
                         )}
                       </div>
                     </div>
+
+                    {stats ? (
+                      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                          Enterprise Snapshot
+                        </p>
+                        <h3 className="mt-2 text-xl font-semibold text-slate-900">
+                          Branch and SLA performance
+                        </h3>
+                        <div className="mt-6 grid gap-4 md:grid-cols-2">
+                          <div className="rounded-2xl bg-slate-50 p-4">
+                            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                              Avg First Response
+                            </p>
+                            <p className="mt-2 text-2xl font-semibold text-slate-900">
+                              {Math.round(stats.slaSummary?.avgFirstResponseMinutes || 0)} mins
+                            </p>
+                          </div>
+                          <div className="rounded-2xl bg-slate-50 p-4">
+                            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                              Avg First Follow-up
+                            </p>
+                            <p className="mt-2 text-2xl font-semibold text-slate-900">
+                              {Math.round(stats.slaSummary?.avgFirstFollowUpMinutes || 0)} mins
+                            </p>
+                          </div>
+                          <div className="rounded-2xl bg-slate-50 p-4">
+                            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                              Active Catalog
+                            </p>
+                            <p className="mt-2 text-2xl font-semibold text-slate-900">
+                              {(stats.universityCount || 0) + (stats.courseCount || 0)}
+                            </p>
+                            <p className="mt-1 text-sm text-slate-500">
+                              {stats.universityCount || 0} universities, {stats.courseCount || 0} courses
+                            </p>
+                          </div>
+                          <div className="rounded-2xl bg-slate-50 p-4">
+                            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                              Import Activity
+                            </p>
+                            <p className="mt-2 text-2xl font-semibold text-slate-900">
+                              {stats.importCount || 0}
+                            </p>
+                            <p className="mt-1 text-sm text-slate-500">
+                              Logged bulk import operations
+                            </p>
+                          </div>
+                        </div>
+
+                        {stats.branchPerformance?.length ? (
+                          <div className="mt-6 overflow-x-auto">
+                            <table className="w-full min-w-[520px] text-left">
+                              <thead className="border-b border-slate-200 text-xs uppercase tracking-[0.2em] text-slate-500">
+                                <tr>
+                                  <th className="pb-3">Branch</th>
+                                  <th className="pb-3">Leads</th>
+                                  <th className="pb-3">Converted</th>
+                                  <th className="pb-3">Overdue</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100">
+                                {stats.branchPerformance.map((row) => (
+                                  <tr key={row.branchId || row.branchName}>
+                                    <td className="py-4 font-semibold text-slate-900">{row.branchName}</td>
+                                    <td className="py-4 text-sm text-slate-600">{row.leads}</td>
+                                    <td className="py-4 text-sm text-slate-600">{row.converted}</td>
+                                    <td className="py-4 text-sm text-slate-600">{row.overdueFollowUps}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </section>
                 </div>
               ) : null}

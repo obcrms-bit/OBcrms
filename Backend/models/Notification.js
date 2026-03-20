@@ -3,8 +3,13 @@ const mongoose = require('mongoose');
 const notificationSchema = new mongoose.Schema(
   {
     companyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Company', index: true },
+    branchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Branch', index: true },
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    type: { type: String, enum: ['visa', 'crm', 'system', 'reminder'], default: 'system' },
+    type: {
+      type: String,
+      enum: ['visa', 'crm', 'system', 'reminder', 'approval', 'document', 'billing'],
+      default: 'system',
+    },
     title: { type: String, required: true },
     message: { type: String, required: true },
     entityType: { type: String, trim: true },
@@ -20,5 +25,8 @@ const notificationSchema = new mongoose.Schema(
 
 notificationSchema.index({ user: 1, read: 1 });
 notificationSchema.index({ companyId: 1, type: 1, createdAt: -1 });
+notificationSchema.virtual('tenantId').get(function tenantIdGetter() {
+  return this.companyId;
+});
 
 module.exports = mongoose.model('Notification', notificationSchema);

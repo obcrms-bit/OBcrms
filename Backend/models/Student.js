@@ -14,6 +14,14 @@ const studentSchema = new mongoose.Schema(
       index: true,
     },
     branchName: { type: String, trim: true },
+    createdByUser: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    agentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Agent',
+    },
     leadId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Lead',
@@ -53,6 +61,16 @@ const studentSchema = new mongoose.Schema(
     },
     guardianName: { type: String, trim: true },
     guardianContact: { type: String, trim: true },
+    serviceType: {
+      type: String,
+      enum: ['consultancy', 'test_prep'],
+      default: 'consultancy',
+    },
+    entityType: {
+      type: String,
+      enum: ['client', 'student'],
+      default: 'client',
+    },
     educationHistory: [
       {
         institution: String,
@@ -119,6 +137,23 @@ const studentSchema = new mongoose.Schema(
       },
     ],
     leadSnapshot: mongoose.Schema.Types.Mixed,
+    transferHistory: {
+      type: [
+        {
+          fromBranchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Branch' },
+          toBranchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Branch' },
+          transferredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+          transferDate: { type: Date, default: Date.now },
+          reason: { type: String, trim: true },
+          status: { type: String, trim: true, default: 'completed' },
+        },
+      ],
+      default: [],
+    },
+    ownershipLocked: { type: Boolean, default: false },
+    ownershipLockedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    ownershipLockedAt: { type: Date },
+    ownershipLockReason: { type: String, trim: true },
     metadata: mongoose.Schema.Types.Mixed,
     deletedAt: { type: Date, default: null },
   },
@@ -137,6 +172,7 @@ studentSchema.pre('save', function syncStudentAliases(next) {
   if (!this.fullName) {
     this.fullName = `${this.firstName || ''} ${this.lastName || ''}`.trim();
   }
+  this.entityType = this.serviceType === 'test_prep' ? 'student' : 'client';
   next();
 });
 
@@ -145,5 +181,6 @@ studentSchema.index(
   { unique: true, partialFilterExpression: { email: { $type: 'string' } } }
 );
 studentSchema.index({ companyId: 1, phone: 1 }, { unique: true });
+studentSchema.index({ companyId: 1, branchId: 1, assignedCounselor: 1 });
 
 module.exports = mongoose.model('Student', studentSchema);

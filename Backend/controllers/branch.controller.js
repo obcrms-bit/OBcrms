@@ -2,6 +2,7 @@ const Branch = require('../models/Branch');
 const AuditLog = require('../models/AuditLog');
 const { sendSuccess, sendError } = require('../utils/responseHandler');
 const mongoose = require('mongoose');
+const { buildScopedClause, mergeFiltersWithAnd } = require('../services/accessControl.service');
 
 exports.createBranch = async (req, res) => {
   try {
@@ -30,7 +31,13 @@ exports.createBranch = async (req, res) => {
 exports.getBranches = async (req, res) => {
   try {
     const companyObjectId = new mongoose.Types.ObjectId(req.companyId);
-    const branches = await Branch.find({ companyId: companyObjectId }).sort({ name: 1 });
+    const query = mergeFiltersWithAnd(
+      { companyId: companyObjectId, deletedAt: null },
+      await buildScopedClause(req.user, 'branches', {
+        branchField: '_id',
+      })
+    );
+    const branches = await Branch.find(query).sort({ isHeadOffice: -1, name: 1 });
     return sendSuccess(res, 200, 'Branches retrieved successfully', branches);
   } catch (error) {
     return sendError(res, 500, 'Failed to fetch branches', error.message);
@@ -69,10 +76,19 @@ exports.deleteBranch = async (req, res) => {
     // We could do soft delete if we add deletedAt to schema,
     // but for now let's just use isActive or hard delete.
     // Based on model, there's no deletedAt, so we use isActive or findByIdAndDelete.
-    const branch = await Branch.findOneAndDelete({
-      _id: req.params.id,
-      companyId: new mongoose.Types.ObjectId(req.companyId),
-    });
+    const branch = await Branch.findOneAndUpdate(
+      {
+        _id: req.params.id,
+        companyId: new mongoose.Types.ObjectId(req.companyId),
+      },
+      {
+        $set: {
+          isActive: false,
+          deletedAt: new Date(),
+        },
+      },
+      { new: true }
+    );
 
     if (!branch) return sendError(res, 404, 'Branch not found');
 

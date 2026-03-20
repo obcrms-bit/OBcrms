@@ -30,6 +30,10 @@
     --input: 214.3 31.8% 91.4%;
     --ring: 221.2 83.2% 53.3%;
     --radius: 0.5rem;
+    --brand-primary: #0f766e;
+    --brand-secondary: #0f172a;
+    --brand-accent: #14b8a6;
+    --brand-font-family: Inter;
   }
 
   .dark {
@@ -58,5 +62,6 @@
 @layer base {
   body {
     @apply bg-background text-foreground;
+    font-family: var(--brand-font-family), ui-sans-serif, system-ui, sans-serif;
   }
 }
