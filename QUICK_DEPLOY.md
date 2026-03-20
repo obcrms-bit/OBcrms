@@ -26,16 +26,15 @@ Environment: Node
 Region: Oregon (us-west)
 Branch: main
 Root Directory: Backend          ← IMPORTANT
-Build Command: npm install
+Build Command: npm install --legacy-peer-deps
 Start Command: npm start
 ```
 
 ### 4. Add Environment Variables
 In Render dashboard, go to "Environment":
 ```
-MONGO_URI=mongodb+srv://obcrms_db_user:OBcrm@123@crmbackend.ahypd1w.mongodb.net/?appName=CRMBACKEND
-JWT_SECRET=whtPXDxhtcwJRn45Vh+qfQ2Ktb3u/oCQfH2WQiq+zm8=
-PORT=5000
+MONGO_URI=mongodb+srv://your_mongo_username:your_password@cluster.mongodb.net/?appName=CRMBACKEND
+JWT_SECRET=<generate-a-new-secret>
 NODE_ENV=production
 FRONTEND_URL=https://YOUR-VERCEL-URL.vercel.app
 ```
@@ -71,7 +70,7 @@ Node Version: 18.x
 
 ### 4. Add Environment Variables
 ```
-NEXT_PUBLIC_API_URL=https://your-api-name.onrender.com
+NEXT_PUBLIC_API_URL=https://your-api-name.onrender.com/api
 NEXT_PUBLIC_APP_NAME=Trust Education CRM
 ```
 
@@ -174,3 +173,5 @@ Your CRM is now live and production-ready!
 **Frontend URL**: `https://your-app.vercel.app`
 
 Share these links with your team! 🚀
+
+

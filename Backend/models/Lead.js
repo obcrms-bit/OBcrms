@@ -35,26 +35,26 @@ const FOLLOW_UP_OUTCOMES = [
 
 const mapPipelineStatusToStage = (status) => {
   switch (status) {
-    case 'new':
-      return 1;
-    case 'contacted':
-    case 'qualified':
-      return 2;
-    case 'counselling_scheduled':
-    case 'counselling_done':
-      return 3;
-    case 'application_started':
-    case 'documents_pending':
-    case 'application_submitted':
-    case 'offer_received':
-      return 4;
-    case 'visa_applied':
-      return 5;
-    case 'enrolled':
-    case 'lost':
-      return 6;
-    default:
-      return 1;
+  case 'new':
+    return 1;
+  case 'contacted':
+  case 'qualified':
+    return 2;
+  case 'counselling_scheduled':
+  case 'counselling_done':
+    return 3;
+  case 'application_started':
+  case 'documents_pending':
+  case 'application_submitted':
+  case 'offer_received':
+    return 4;
+  case 'visa_applied':
+    return 5;
+  case 'enrolled':
+  case 'lost':
+    return 6;
+  default:
+    return 1;
   }
 };
 

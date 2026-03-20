@@ -8,7 +8,7 @@ MONGO_URI=mongodb+srv://username:password@cluster.mongodb.net/?appName=CRMBACKEN
 
 # ===== JWT AUTHENTICATION (Required) =====
 # Generate: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-JWT_SECRET=Be+f8wmO6YoWep2QGu9ezk3zxRr44z8AyfcW9wUo0ro=
+JWT_SECRET=<generate-a-new-secret>
 
 # ===== SERVER CONFIGURATION =====
 PORT=5000
@@ -39,3 +39,4 @@ RATE_LIMIT_MAX_REQUESTS=100
 # 3. In Environment Variables section, paste these
 # 4. Replace placeholder values with actual credentials
 # 5. Click "Deploy" or "Redeploy"
+

@@ -1,102 +1,114 @@
-# =============================
-# Full-Stack Deployment Script
-# Backend → Render, Frontend → Vercel
-# =============================
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
 
-# Helper: Generate secure JWT_SECRET
-function New-RandomSecret([int]$length=32) {
-    [System.Convert]::ToBase64String((1..$length | ForEach-Object { [byte](Get-Random -Minimum 0 -Maximum 256) }))
+function Write-Section($title) {
+    Write-Host ""
+    Write-Host "=== $title ===" -ForegroundColor Cyan
 }
 
-# -----------------------------
-# 1️⃣ Prepare Backend
-# -----------------------------
-Write-Host "Installing dependencies and fixing ESLint..."
-npm uninstall @eslint/js
-npm install @eslint/js@^9 --save-dev
-npm install --legacy-peer-deps
-npx eslint . --ext .js,.ts,.jsx,.tsx --fix
+function Test-Tool($name) {
+    if (-not (Get-Command $name -ErrorAction SilentlyContinue)) {
+        throw "Required tool not found in PATH: $name"
+    }
+}
 
-Write-Host "Updating package.json scripts..."
-$pkg = Get-Content package.json | ConvertFrom-Json
-if (-not $pkg.scripts) { $pkg.scripts = @{} }
-$pkg.scripts.start = "node server.js"
-$pkg.scripts.build = "next build"
-$pkg.scripts.lint = "eslint . --ext .js,.ts,.jsx,.tsx"
-$pkg | ConvertTo-Json -Depth 5 | Set-Content package.json
+function Invoke-Step($label, $scriptBlock) {
+    Write-Host "-> $label" -ForegroundColor Yellow
+    & $scriptBlock
+}
 
-Remove-Item -Recurse -Force node_modules, package-lock.json
-npm install --legacy-peer-deps
+$repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+Set-Location $repoRoot
 
-Write-Host "Building backend locally..."
-npm run build
-Start-Process npm -ArgumentList "start"
-Start-Sleep -Seconds 5
-Get-Process node | Stop-Process -Force
+Write-Section "Preflight"
+Test-Tool git
+Test-Tool npm
 
-# -----------------------------
-# 2️⃣ Commit to GitHub
-# -----------------------------
-git init
-git add .
-git commit -m "Prepare backend for Render deployment"
-$GH_REPO = Read-Host "Enter GitHub repo (username/repo)"
-git remote add origin https://github.com/$GH_REPO.git
-git branch -M main
-git push -u origin main
+if (-not (Test-Path ".git")) {
+    throw "This script must be run inside an existing git repository."
+}
 
-# -----------------------------
-# 3️⃣ Deploy Backend to Render
-# -----------------------------
-$RENDER_NAME = Read-Host "Enter Render backend service name"
-$RENDER_TEAM = Read-Host "Enter Render team (leave blank for personal account)"
+$backendDir = Join-Path $repoRoot "Backend"
+$frontendDir = Join-Path $repoRoot "Frontend"
 
-Write-Host "Deploying backend to Render..."
-$renderArgs = @(
-    "services","create","web",
-    "--name",$RENDER_NAME,
-    "--repo","https://github.com/$GH_REPO",
-    "--branch","main",
-    "--build-command","npm install && npm run build",
-    "--start-command","npm start"
-)
-if ($RENDER_TEAM) { $renderArgs += @("--team",$RENDER_TEAM) }
-$backendDeploy = render @renderArgs
+if (-not (Test-Path $backendDir) -or -not (Test-Path $frontendDir)) {
+    throw "Expected Backend/ and Frontend/ directories were not found."
+}
 
-# Wait a few seconds for Render to initialize and return the URL
-Start-Sleep -Seconds 15
+Write-Section "Install And Build"
+Invoke-Step "Install root dependencies" { npm install }
+Invoke-Step "Build backend + frontend from repo root" { npm run build }
 
-# -----------------------------
-# 4️⃣ Set backend URL as Vercel secret
-# -----------------------------
-$BACKEND_URL = Read-Host "Enter your backend URL from Render (e.g., https://<service>.onrender.com)"
-vercel secrets add api_url $BACKEND_URL
+Write-Section "Git Status"
+$currentBranch = (git branch --show-current).Trim()
+$remoteInfo = git remote -v
 
-# -----------------------------
-# 5️⃣ Generate other Vercel environment variables
-# -----------------------------
-$JWT_SECRET = New-RandomSecret 32
-$APP_NAME = Read-Host "Enter your frontend app name (e.g., TrustCRM)"
-vercel secrets add jwt_secret $JWT_SECRET
-vercel secrets add app_name $APP_NAME
+Write-Host "Current branch: $currentBranch"
+if ($remoteInfo) {
+    Write-Host "Configured remotes:"
+    $remoteInfo
+} else {
+    Write-Host "No git remote is configured yet."
+}
 
-# -----------------------------
-# 6️⃣ Deploy frontend to Vercel
-# -----------------------------
-$VERCEL_PROJECT = Read-Host "Enter Vercel project name"
-$VERCEL_TEAM = Read-Host "Enter Vercel team (leave blank for personal)"
-$vercelArgs = @("--prod", "--name", $VERCEL_PROJECT)
-if ($VERCEL_TEAM) { $vercelArgs += @("--team", $VERCEL_TEAM) }
-$vercelArgs += @("--env", "NEXT_PUBLIC_API_URL=api_url")
-$vercelArgs += @("--env", "JWT_SECRET=jwt_secret")
-$vercelArgs += @("--env", "NEXT_PUBLIC_APP_NAME=app_name")
+$targetBranch = if ($currentBranch) { $currentBranch } else { "main" }
+if ($targetBranch -ne "main") {
+    $switchToMain = Read-Host "Switch current branch to main before push? (y/N)"
+    if ($switchToMain -match '^(y|yes)$') {
+        git branch -M main
+        $targetBranch = "main"
+    }
+}
 
-Write-Host "Deploying frontend to Vercel..."
-vercel @vercelArgs
+if (-not $remoteInfo) {
+    $githubRemote = Read-Host "Enter GitHub remote URL to add as origin (leave blank to skip push)"
+    if ($githubRemote) {
+        git remote add origin $githubRemote
+        $remoteInfo = git remote -v
+    }
+}
 
-Write-Host "========================================"
-Write-Host "✅ Full-stack deployment complete!"
-Write-Host "Backend URL: $BACKEND_URL"
-Write-Host "Frontend deployed at Vercel project: $VERCEL_PROJECT"
-Write-Host "Generated JWT_SECRET: $JWT_SECRET"
-Write-Host "========================================"
+Write-Section "Commit"
+$status = git status --short
+if ($status) {
+    $commitMessage = Read-Host "Enter commit message for deployment readiness changes"
+    if (-not $commitMessage) {
+        $commitMessage = "Prepare repo for Render and Vercel deployment"
+    }
+
+    git add .
+    git commit -m $commitMessage
+} else {
+    Write-Host "No uncommitted changes detected."
+}
+
+if ($remoteInfo) {
+    Write-Section "Push"
+    $pushNow = Read-Host "Push $targetBranch to origin now? (y/N)"
+    if ($pushNow -match '^(y|yes)$') {
+        git push -u origin $targetBranch
+    } else {
+        Write-Host "Skipping push."
+    }
+}
+
+Write-Section "Render Settings"
+Write-Host "Root Directory : Backend"
+Write-Host "Build Command  : npm install --legacy-peer-deps"
+Write-Host "Start Command  : npm start"
+Write-Host "Health Check   : /health"
+Write-Host "Required envs  : MONGO_URI, JWT_SECRET, FRONTEND_URL"
+Write-Host "Recommended    : FRONTEND_URLS, BACKEND_URL, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, EMAIL_FROM"
+
+Write-Section "Vercel Settings"
+Write-Host "Framework      : Next.js"
+Write-Host "Root Directory : Frontend"
+Write-Host "Install Command: npm install --legacy-peer-deps"
+Write-Host "Build Command  : npm run build"
+Write-Host "Output Dir     : leave blank"
+Write-Host "Required envs  : NEXT_PUBLIC_API_URL"
+Write-Host ""
+Write-Host "Do not expose backend-only secrets such as JWT_SECRET to Vercel."
+
+Write-Section "Done"
+Write-Host "Repository preflight completed successfully."

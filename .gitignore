@@ -139,3 +139,12 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vercel
 .env*.local
+Frontend/.next/
+Frontend/build/
+Frontend/node_modules/
+Backend/node_modules/
+Frontend/build_errors*.log
+Backend/server_log.txt
+Backend/test_report.json
+Backend/final-test-report.json
+integration-test-results.json

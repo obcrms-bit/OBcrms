@@ -3,8 +3,10 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const chatService = require('../services/ChatService');
 const { toConversationSummary } = require('../utils/chat');
+const { buildOriginList, isOriginAllowed } = require('../utils/origins');
 
 const JWT_SECRET = process.env.JWT_SECRET;
+const allowedOrigins = buildOriginList();
 
 let ioInstance = null;
 const activeSocketsByUser = new Map();
@@ -115,7 +117,13 @@ const initSocket = (httpServer) => {
 
   ioInstance = new Server(httpServer, {
     cors: {
-      origin: true,
+      origin: (origin, callback) => {
+        if (isOriginAllowed(origin, allowedOrigins) || process.env.NODE_ENV !== 'production') {
+          return callback(null, true);
+        }
+
+        return callback(new Error(`Socket CORS: Origin ${origin} not allowed`), false);
+      },
       credentials: true,
     },
   });

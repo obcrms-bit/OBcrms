@@ -15,7 +15,11 @@ const Student = require('../models/Student');
 const VisaRule = require('../models/VisaRule');
 const VisaApplication = require('../models/VisaApplication');
 
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/trust-education-crm';
+const MONGO_URI = process.env.MONGO_URI;
+
+if (!MONGO_URI) {
+  throw new Error('MONGO_URI is required to run the seed script.');
+}
 
 async function seed() {
   await mongoose.connect(MONGO_URI);

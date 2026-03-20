@@ -20,7 +20,7 @@
 ### 1.2 Create Database User
 1. Go to "Database Access" (left sidebar)
 2. Click "Add a Database User"
-3. Username: `obcrms_db_user`
+3. Username: `your_mongo_username`
 4. Password: Generate a strong password
 5. Click "Create"
 
@@ -33,7 +33,7 @@
 
 **Example:**
 ```
-mongodb+srv://obcrms_db_user:password@crmbackend.ahypd1w.mongodb.net/?appName=CRMBACKEND
+mongodb+srv://your_mongo_username:password@cluster.mongodb.net/?appName=CRMBACKEND
 ```
 
 ---
@@ -56,18 +56,17 @@ Fill in the following:
 | **Environment** | `Node` |
 | **Region** | Choose closest to users |
 | **Branch** | `main` |
-| **Build Command** | `npm install --legacy-peer-deps && npm run build` |
+| **Root Directory** | `Backend` |
+| **Build Command** | `npm install --legacy-peer-deps` |
 | **Start Command** | `npm start` |
 
 ### 2.3 Add Environment Variables
 Click "Advanced" → "Add Environment Variable" for each:
 
 ```
-MONGO_URI=mongodb+srv://obcrms_db_user:password@crmbackend.ahypd1w.mongodb.net/?appName=CRMBACKEND
+MONGO_URI=mongodb+srv://your_mongo_username:password@cluster.mongodb.net/?appName=CRMBACKEND
 
-JWT_SECRET=Be+f8wmO6YoWep2QGu9ezk3zxRr44z8AyfcW9wUo0ro=
-
-PORT=5000
+JWT_SECRET=<generate-a-new-secret>
 
 NODE_ENV=production
 
@@ -212,3 +211,7 @@ NEXT_PUBLIC_API_URL=https://your-backend-name.onrender.com/api
 
 **Created**: March 18, 2026
 **Status**: Ready for Deployment ✅
+
+
+
+

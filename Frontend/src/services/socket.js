@@ -22,6 +22,7 @@ export const getChatSocket = (token) => {
   chatSocket = io(getSocketBaseUrl(), {
     autoConnect: true,
     auth: { token },
+    path: '/socket.io',
     transports: ['websocket', 'polling'],
     withCredentials: true,
   });

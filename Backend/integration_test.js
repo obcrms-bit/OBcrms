@@ -1,6 +1,7 @@
 const fs = require('fs');
 
-const API_URL = 'http://localhost:5000/api';
+const baseOrigin = process.env.API_ORIGIN || `http://localhost:${process.env.PORT || 5000}`;
+const API_URL = `${baseOrigin.replace(/\/+$/, '')}/api`;
 
 const fetchJson = async (url, options = {}) => {
   options.headers = { 'Content-Type': 'application/json', ...options.headers };
@@ -30,7 +31,7 @@ const runTest = async () => {
 
   try {
     // 1. Connectivity
-    const health = await fetch('http://localhost:5000/');
+    const health = await fetch(`${baseOrigin.replace(/\/+$/, '')}/`);
     assert(health.status === 200, 'Backend connectivity');
 
     // 2. Multi-tenancy & Registration

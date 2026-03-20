@@ -42,7 +42,7 @@ Your full-stack application is **completely prepared** for production deployment
 ✓ Clean Node.js dependencies installed
 ✓ ESLint: CLEAN (0 errors, 52 warnings within limit)
 ✓ Environment variables documented
-✓ JWT_SECRET generated: Be+f8wmO6YoWep2QGu9ezk3zxRr44z8AyfcW9wUo0ro=
+✓ JWT_SECRET generated: <generate-a-new-secret>
 ✓ Server health check ready
 ✓ MongoDB connection prepared
 ```
@@ -103,7 +103,7 @@ NEXT_PUBLIC_API_URL=https://your-backend.onrender.com/api
 # 2. Create Web Service from GitHub: obcrms-bit/OBcrms
 # 3. Set environment variables:
 MONGO_URI=mongodb+srv://user:pass@cluster.mongodb.net/?appName=CRMBACKEND
-JWT_SECRET=Be+f8wmO6YoWep2QGu9ezk3zxRr44z8AyfcW9wUo0ro=
+JWT_SECRET=<generate-a-new-secret>
 PORT=5000
 NODE_ENV=production
 FRONTEND_URL=https://your-frontend.vercel.app
@@ -311,3 +311,4 @@ All code quality checks pass, dependencies are clean, and comprehensive deployme
 **Report Generated**: March 18, 2026  
 **Report Status**: ✅ COMPLETE  
 **Next Action**: Deploy to Vercel & Render
+

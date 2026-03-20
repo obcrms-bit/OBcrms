@@ -101,26 +101,26 @@ const hasFullLeadAccess = (user) => FULL_ACCESS_ROLES.includes(user?.role);
 
 const getStageNumber = (status) => {
   switch (status) {
-    case 'new':
-      return 1;
-    case 'contacted':
-    case 'qualified':
-      return 2;
-    case 'counselling_scheduled':
-    case 'counselling_done':
-      return 3;
-    case 'application_started':
-    case 'documents_pending':
-    case 'application_submitted':
-    case 'offer_received':
-      return 4;
-    case 'visa_applied':
-      return 5;
-    case 'enrolled':
-    case 'lost':
-      return 6;
-    default:
-      return 1;
+  case 'new':
+    return 1;
+  case 'contacted':
+  case 'qualified':
+    return 2;
+  case 'counselling_scheduled':
+  case 'counselling_done':
+    return 3;
+  case 'application_started':
+  case 'documents_pending':
+  case 'application_submitted':
+  case 'offer_received':
+    return 4;
+  case 'visa_applied':
+    return 5;
+  case 'enrolled':
+  case 'lost':
+    return 6;
+  default:
+    return 1;
   }
 };
 
@@ -149,27 +149,27 @@ const sanitizeLeadPayload = (rawPayload = {}) => {
   const nameParts = rawName
     ? splitName(rawName)
     : {
-        name: [rawFirstName, rawLastName].filter(Boolean).join(' ') || undefined,
-        firstName: rawFirstName,
-        lastName: rawLastName || '',
-      };
+      name: [rawFirstName, rawLastName].filter(Boolean).join(' ') || undefined,
+      firstName: rawFirstName,
+      lastName: rawLastName || '',
+    };
 
   const preferredCountries = Array.isArray(rawPayload.preferredCountries)
     ? rawPayload.preferredCountries.map((value) => normalizeString(value)).filter(Boolean)
     : rawPayload.preferredCountries
       ? String(rawPayload.preferredCountries)
-          .split(',')
-          .map((value) => normalizeString(value))
-          .filter(Boolean)
+        .split(',')
+        .map((value) => normalizeString(value))
+        .filter(Boolean)
       : undefined;
 
   const tags = Array.isArray(rawPayload.tags)
     ? rawPayload.tags.map((value) => normalizeString(value)).filter(Boolean)
     : rawPayload.tags
       ? String(rawPayload.tags)
-          .split(',')
-          .map((value) => normalizeString(value))
-          .filter(Boolean)
+        .split(',')
+        .map((value) => normalizeString(value))
+        .filter(Boolean)
       : undefined;
 
   const phone = normalizeString(rawPayload.phone);
@@ -222,24 +222,24 @@ const sanitizeLeadPayload = (rawPayload = {}) => {
     address: rawPayload.address && typeof rawPayload.address === 'object' ? rawPayload.address : undefined,
     education: rawPayload.education
       ? {
-          lastDegree: normalizeString(rawPayload.education.lastDegree) || undefined,
-          institution: normalizeString(rawPayload.education.institution) || undefined,
-          percentage: normalizeNumber(rawPayload.education.percentage),
-          passingYear: normalizeNumber(rawPayload.education.passingYear),
-          gpa: normalizeNumber(rawPayload.education.gpa),
-        }
+        lastDegree: normalizeString(rawPayload.education.lastDegree) || undefined,
+        institution: normalizeString(rawPayload.education.institution) || undefined,
+        percentage: normalizeNumber(rawPayload.education.percentage),
+        passingYear: normalizeNumber(rawPayload.education.passingYear),
+        gpa: normalizeNumber(rawPayload.education.gpa),
+      }
       : undefined,
     englishTest: rawPayload.englishTest
       ? {
-          type: normalizeLowerString(rawPayload.englishTest.type) || 'none',
-          score: normalizeNumber(rawPayload.englishTest.score),
-          dateTaken: normalizeDate(rawPayload.englishTest.dateTaken),
-        }
+        type: normalizeLowerString(rawPayload.englishTest.type) || 'none',
+        score: normalizeNumber(rawPayload.englishTest.score),
+        dateTaken: normalizeDate(rawPayload.englishTest.dateTaken),
+      }
       : undefined,
     qualifications: Array.isArray(rawPayload.qualifications)
       ? rawPayload.qualifications.map(sanitizeQualification).filter((item) =>
-          Object.values(item).some(Boolean)
-        )
+        Object.values(item).some(Boolean)
+      )
       : undefined,
   };
 
@@ -508,13 +508,13 @@ exports.createLead = asyncHandler(async (req, res) => {
     recordType: payload.recordType || 'lead',
     assignmentHistory: payload.assignedCounsellor
       ? [
-          {
-            counsellor: payload.assignedCounsellor,
-            assignedAt: new Date(),
-            assignedBy: req.user?._id,
-            reason: 'Assigned during lead creation',
-          },
-        ]
+        {
+          counsellor: payload.assignedCounsellor,
+          assignedAt: new Date(),
+          assignedBy: req.user?._id,
+          reason: 'Assigned during lead creation',
+        },
+      ]
       : [],
   });
 
@@ -695,25 +695,25 @@ const buildStudentPayloadFromLead = (lead, user) => {
     educationHistory:
       lead.qualifications?.length > 0
         ? lead.qualifications.map((qualification) => ({
-            institution: qualification.institution,
-            degree: qualification.degree,
-            major: qualification.course,
-            percentage: normalizeNumber(qualification.percentageValue),
-            passingYear: normalizeNumber(qualification.passedYear),
-            level: qualification.level,
-            country: qualification.country,
-            universityTitle: qualification.universityTitle,
-            point: qualification.point,
-            percentageValue: qualification.percentageValue,
-          }))
+          institution: qualification.institution,
+          degree: qualification.degree,
+          major: qualification.course,
+          percentage: normalizeNumber(qualification.percentageValue),
+          passingYear: normalizeNumber(qualification.passedYear),
+          level: qualification.level,
+          country: qualification.country,
+          universityTitle: qualification.universityTitle,
+          point: qualification.point,
+          percentageValue: qualification.percentageValue,
+        }))
         : [
-            {
-              institution: lead.education?.institution,
-              degree: lead.education?.lastDegree,
-              percentage: lead.education?.percentage,
-              passingYear: lead.education?.passingYear,
-            },
-          ].filter((item) => Object.values(item).some(Boolean)),
+          {
+            institution: lead.education?.institution,
+            degree: lead.education?.lastDegree,
+            percentage: lead.education?.percentage,
+            passingYear: lead.education?.passingYear,
+          },
+        ].filter((item) => Object.values(item).some(Boolean)),
     interestedCountries: lead.preferredCountries || [],
     interestedCourses: lead.interestedCourse ? [lead.interestedCourse] : [],
     assignedCounselor: lead.assignedCounsellor || lead.assignedTo || user?._id,

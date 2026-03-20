@@ -70,14 +70,9 @@ class EmailService {
       const transporter = EmailService._getTransporter();
       const config = EmailService._getConfig();
       const templatePath = path.join(__dirname, '../templates/invoice_email.ejs');
-
-      const templateDir = path.dirname(templatePath);
-      if (!fs.existsSync(templateDir)) {
-        fs.mkdirSync(templateDir, { recursive: true });
-      }
-      if (!fs.existsSync(templatePath)) {
-        fs.writeFileSync(
-          templatePath,
+      const html = fs.existsSync(templatePath)
+        ? await ejs.renderFile(templatePath, invoiceData)
+        : await ejs.render(
           `<!DOCTYPE html>
 <html>
 <body>
@@ -88,11 +83,9 @@ class EmailService {
   <p>Due Date: <%= dueDate %></p>
   <p>Best Regards,<br><%= companyName %></p>
 </body>
-</html>`
+</html>`,
+          invoiceData
         );
-      }
-
-      const html = await ejs.renderFile(templatePath, invoiceData);
 
       await transporter.sendMail({
         from: `"${invoiceData.companyName}" <${config.from}>`,
@@ -136,18 +129,18 @@ class EmailService {
           <tr><td style="padding: 6px 12px 6px 0;"><strong>Mobile</strong></td><td>${leadPhone || 'Not provided'}</td></tr>
           <tr><td style="padding: 6px 12px 6px 0;"><strong>Email</strong></td><td>${leadEmail || 'Not provided'}</td></tr>
           <tr><td style="padding: 6px 12px 6px 0;"><strong>Scheduled for</strong></td><td>${new Date(
-            scheduledAt
-          ).toLocaleString()}</td></tr>
+    scheduledAt
+  ).toLocaleString()}</td></tr>
           <tr><td style="padding: 6px 12px 6px 0;"><strong>Method</strong></td><td>${method || 'Call'}</td></tr>
           <tr><td style="padding: 6px 12px 6px 0;"><strong>Reminder count</strong></td><td>${
-            reminderCount || 1
-          }</td></tr>
+  reminderCount || 1
+}</td></tr>
         </table>
         ${
-          leadUrl
-            ? `<p><a href="${leadUrl}" style="display:inline-block; background:#0f172a; color:#fff; text-decoration:none; padding:10px 16px; border-radius:10px;">Open lead in CRM</a></p>`
-            : ''
-        }
+  leadUrl
+    ? `<p><a href="${leadUrl}" style="display:inline-block; background:#0f172a; color:#fff; text-decoration:none; padding:10px 16px; border-radius:10px;">Open lead in CRM</a></p>`
+    : ''
+}
         <p style="margin-top: 18px;">Please complete or reschedule the follow-up to keep the pipeline current.</p>
       </div>
     `;
@@ -172,11 +165,11 @@ class EmailService {
           <tr>
             <td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;">${item.leadName}</td>
             <td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;">${
-              item.counsellorName || '-'
-            }</td>
+  item.counsellorName || '-'
+}</td>
             <td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;">${new Date(
-              item.scheduledAt
-            ).toLocaleString()}</td>
+    item.scheduledAt
+  ).toLocaleString()}</td>
             <td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;">${item.status}</td>
           </tr>
         `

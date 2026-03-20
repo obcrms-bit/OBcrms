@@ -161,8 +161,8 @@ trust-education-crm-erp/
 ### 6. Backend/.env.example
 **UPDATED:**
 ```bash
-MONGO_URI=mongodb+srv://obcrms_db_user:OBcrm@123@crmbackend.ahypd1w.mongodb.net/?appName=CRMBACKEND
-JWT_SECRET=whtPXDxhtcwJRn45Vh+qfQ2Ktb3u/oCQfH2WQiq+zm8=
+MONGO_URI=mongodb+srv://your_mongo_username:your_password@cluster.mongodb.net/?appName=CRMBACKEND
+JWT_SECRET=<generate-a-new-secret>
 PORT=5000
 NODE_ENV=production
 FRONTEND_URL=https://yourdomain.vercel.app
@@ -312,3 +312,4 @@ Expected:
 - `DEPLOYMENT_PRODUCTION.md` for complete details
 - Render docs: https://render.com/docs
 - Vercel docs: https://vercel.com/docs
+

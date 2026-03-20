@@ -38,6 +38,7 @@ const cors = require('cors');
 const morgan = require('morgan');
 const helmet = require('helmet');
 const compression = require('compression');
+const { buildOriginList, isOriginAllowed } = require('./utils/origins');
 
 // ==================== 4. GLOBAL ERROR HANDLERS (before anything else) ====================
 process.on('uncaughtException', (err) => {
@@ -56,6 +57,8 @@ process.on('unhandledRejection', (err) => {
 
 // ==================== 5. CREATE EXPRESS APP ====================
 const app = express();
+app.disable('x-powered-by');
+app.set('trust proxy', 1);
 
 // ==================== 6. SET PORT ====================
 const PORT = process.env.PORT || 5000;
@@ -68,26 +71,14 @@ app.use(helmet());
 app.use(compression());
 
 // CORS: In production, only allow explicitly configured frontend URLs.
-// Accept a single FRONTEND_URL or a comma-separated FRONTEND_URLS list.
-const normalizeOrigin = (value) => value?.trim().replace(/\/$/, '');
-
-const configuredOrigins = [
-  process.env.FRONTEND_URL,
-  ...(process.env.FRONTEND_URLS || '').split(','),
-]
-  .map(normalizeOrigin)
-  .filter(Boolean);
-
-const allowedOrigins = configuredOrigins.length
-  ? configuredOrigins
-  : ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:5000'];
+const allowedOrigins = buildOriginList();
 
 app.use(
   cors({
     origin: (origin, callback) => {
       // Allow requests with no origin (e.g., mobile apps, curl, Postman)
       if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(normalizeOrigin(origin))) {
+      if (isOriginAllowed(origin, allowedOrigins)) {
         return callback(null, true);
       }
       // In dev, allow everything; in prod, strictly enforce
@@ -194,6 +185,7 @@ mongoose
   .then(() => {
     console.log(`MongoDB target host: ${mongoTarget}`);
     console.log('✅ MongoDB Connected Successfully');
+    console.log(`Allowed web origins: ${allowedOrigins.join(', ')}`);
     const server = app.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT} [${NODE_ENV}]`);
     });

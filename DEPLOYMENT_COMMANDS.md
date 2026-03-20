@@ -58,8 +58,8 @@ Start Command:         npm start
 5. Click **"Advanced"** → Add Environment Variables:
 
 ```
-MONGO_URI=mongodb+srv://obcrms_db_user:OBcrm@123@crmbackend.ahypd1w.mongodb.net/?appName=CRMBACKEND
-JWT_SECRET=whtPXDxhtcwJRn45Vh+qfQ2Ktb3u/oCQfH2WQiq+zm8=
+MONGO_URI=mongodb+srv://your_mongo_username:your_password@cluster.mongodb.net/?appName=CRMBACKEND
+JWT_SECRET=<generate-a-new-secret>
 PORT=5000
 NODE_ENV=production
 FRONTEND_URL=https://YOUR_VERCEL_URL.vercel.app
@@ -67,12 +67,12 @@ FRONTEND_URL=https://YOUR_VERCEL_URL.vercel.app
 
 6. Click **"Create Web Service"**
 7. **Wait 2-3 minutes** for deployment
-8. **Copy your API URL**: `https://trust-education-crm-api.onrender.com`
+8. **Copy your API URL**: `https://your-backend-service.onrender.com`
 
 ### Verify Backend Deployed
 
 ```bash
-curl https://trust-education-crm-api.onrender.com/health
+curl https://your-backend-service.onrender.com/health
 ```
 
 Should return:
@@ -103,7 +103,7 @@ Node Version:          18.x
 5. Click **"Environment Variables"** and add:
 
 ```
-NEXT_PUBLIC_API_URL=https://trust-education-crm-api.onrender.com
+NEXT_PUBLIC_API_URL=https://your-backend-service.onrender.com
 NEXT_PUBLIC_APP_NAME=Trust Education CRM
 ```
 
@@ -130,11 +130,11 @@ NEXT_PUBLIC_APP_NAME=Trust Education CRM
 
 ```bash
 # Test health check
-curl https://trust-education-crm-api.onrender.com/health
+curl https://your-backend-service.onrender.com/health
 
 # Test CORS from frontend
 curl -H "Origin: https://YOUR_VERCEL_URL.vercel.app" \
-  https://trust-education-crm-api.onrender.com/api/students
+  https://your-backend-service.onrender.com/api/students
 ```
 
 ### Test Frontend Features
@@ -230,8 +230,8 @@ curl -X GET "https://YOUR_API_URL/health" \
 ### For Render Dashboard (Backend)
 
 ```
-MONGO_URI=mongodb+srv://obcrms_db_user:OBcrm@123@crmbackend.ahypd1w.mongodb.net/?appName=CRMBACKEND
-JWT_SECRET=whtPXDxhtcwJRn45Vh+qfQ2Ktb3u/oCQfH2WQiq+zm8=
+MONGO_URI=mongodb+srv://your_mongo_username:your_password@cluster.mongodb.net/?appName=CRMBACKEND
+JWT_SECRET=<generate-a-new-secret>
 PORT=5000
 NODE_ENV=production
 FRONTEND_URL=https://YOUR_VERCEL_URL.vercel.app
@@ -292,3 +292,4 @@ If deployment fails:
 5. Try manual redeploy
 
 Good luck! 🚀
+

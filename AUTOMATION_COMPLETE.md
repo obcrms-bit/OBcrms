@@ -120,8 +120,8 @@
 ### 5. Backend/.env.example
 **Updated** with production variables:
 ```
-MONGO_URI=mongodb+srv://obcrms_db_user:OBcrm@123@...
-JWT_SECRET=whtPXDxhtcwJRn45Vh+qfQ2Ktb3u/oCQfH2WQiq+zm8=
+MONGO_URI=mongodb+srv://your_mongo_username:your_password@...
+JWT_SECRET=<generate-a-new-secret>
 PORT=5000
 NODE_ENV=production
 FRONTEND_URL=https://yourdomain.vercel.app
@@ -440,3 +440,4 @@ Deploy Status: ✅ READY
 Your project has been analyzed, fixed, tested, and documented. Everything is production-ready. Start with QUICK_DEPLOY.md and you'll be live in ~20 minutes.
 
 Good luck! 🌟
+

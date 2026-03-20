@@ -37,16 +37,15 @@
    - **Branch**: `main`
    - **Root Directory**: `Backend`
    - **Runtime**: `node-18`
-   - **Build Command**: `npm install`
+   - **Build Command**: `npm install --legacy-peer-deps`
    - **Start Command**: `npm start`
 
 5. **Add Environment Variables**
 
    In Render dashboard, add these variables:
    ```
-   MONGO_URI=mongodb+srv://obcrms_db_user:OBcrm@123@crmbackend.ahypd1w.mongodb.net/?appName=CRMBACKEND
-   JWT_SECRET=whtPXDxhtcwJRn45Vh+qfQ2Ktb3u/oCQfH2WQiq+zm8=
-   PORT=5000
+   MONGO_URI=mongodb+srv://your_mongo_username:your_password@cluster.mongodb.net/?appName=CRMBACKEND
+   JWT_SECRET=<generate-a-new-secret>
    NODE_ENV=production
    FRONTEND_URL=https://your-vercel-app.vercel.app
    ```
@@ -54,14 +53,14 @@
 6. **Deploy**
    - Click "Create Web Service"
    - Wait for deployment to complete
-   - Copy the URL (e.g., `https://trust-education-crm-api.onrender.com`)
+   - Copy the URL (e.g., `https://your-backend-service.onrender.com`)
    - Save this URL for Frontend setup
 
 ### Verify Backend Deployment
 
 ```bash
 # Test API Health
-curl https://trust-education-crm-api.onrender.com/health
+curl https://your-backend-service.onrender.com/health
 
 # Should return:
 {
@@ -93,7 +92,7 @@ curl https://trust-education-crm-api.onrender.com/health
 
    In Vercel dashboard, add:
    ```
-   NEXT_PUBLIC_API_URL=https://trust-education-crm-api.onrender.com
+   NEXT_PUBLIC_API_URL=https://your-backend-service.onrender.com/api
    NEXT_PUBLIC_APP_NAME=Trust Education CRM
    ```
 
@@ -165,7 +164,6 @@ docker run -p 5000:5000 \
 ```
 MONGO_URI=mongodb+srv://username:password@cluster.mongodb.net/db
 JWT_SECRET=your-jwt-secret-key
-PORT=5000
 NODE_ENV=production
 FRONTEND_URL=https://your-frontend-url.vercel.app
 EMAIL_HOST=smtp.gmail.com
@@ -176,7 +174,7 @@ EMAIL_PASS=your-app-password
 
 ### Frontend (.env.local)
 ```
-NEXT_PUBLIC_API_URL=https://your-backend-url.onrender.com
+NEXT_PUBLIC_API_URL=https://your-backend-url.onrender.com/api
 NEXT_PUBLIC_APP_NAME=Trust Education CRM
 NODE_ENV=development
 ```
@@ -296,3 +294,6 @@ All systems ready for production deployment!
 5. Configure custom domains (optional)
 
 Good luck! 🚀
+
+
+

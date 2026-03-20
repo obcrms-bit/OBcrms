@@ -239,8 +239,8 @@ It contains everything you need in simple, step-by-step format.
 
 ### Environment Variables (Backend - Render)
 ```
-MONGO_URI=mongodb+srv://obcrms_db_user:OBcrm@123@...
-JWT_SECRET=whtPXDxhtcwJRn45Vh+qfQ2Ktb3u/oCQfH2WQiq+zm8=
+MONGO_URI=mongodb+srv://your_mongo_username:your_password@...
+JWT_SECRET=<generate-a-new-secret>
 PORT=5000
 NODE_ENV=production
 FRONTEND_URL=https://your-vercel-app.vercel.app
@@ -281,3 +281,4 @@ Everything is fixed, tested, documented, and ready to deploy.
 ---
 
 **Let's ship it! 🚀**
+

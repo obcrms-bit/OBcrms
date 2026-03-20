@@ -137,22 +137,22 @@ const listConversations = async ({ companyId, currentUserId, search = '' }) => {
   const trimmedSearch = search.trim().toLowerCase();
   const filteredConversations = trimmedSearch
     ? conversations.filter((conversation) => {
-        const summary = toConversationSummary(conversation, currentUserId);
-        const searchableParts = [
-          summary.title,
-          summary.lastMessageText,
-          ...(summary.participants || []).flatMap((participant) => [
-            participant.name,
-            participant.email,
-            participant.role,
-          ]),
-        ]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase();
+      const summary = toConversationSummary(conversation, currentUserId);
+      const searchableParts = [
+        summary.title,
+        summary.lastMessageText,
+        ...(summary.participants || []).flatMap((participant) => [
+          participant.name,
+          participant.email,
+          participant.role,
+        ]),
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
 
-        return searchableParts.includes(trimmedSearch);
-      })
+      return searchableParts.includes(trimmedSearch);
+    })
     : conversations;
 
   return filteredConversations.map((conversation) =>
