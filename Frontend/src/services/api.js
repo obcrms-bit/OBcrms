@@ -100,6 +100,28 @@ export const funnelAPI = {
   bulkTransfer: (data) => api.post('/funnel/bulk/transfer', data),
 };
 
+export const leadIntelligenceAPI = {
+  getOverview: (params = {}) => api.get('/lead-intelligence/overview', { params }),
+  getSettings: () => api.get('/lead-intelligence/settings'),
+  updateSettings: (data) => api.put('/lead-intelligence/settings', data),
+  getCountryRules: () => api.get('/lead-intelligence/country-rules'),
+  saveCountryRule: (data) =>
+    data?.id
+      ? api.patch(`/lead-intelligence/country-rules/${data.id}`, data)
+      : api.post('/lead-intelligence/country-rules', data),
+  deleteCountryRule: (id) => api.delete(`/lead-intelligence/country-rules/${id}`),
+  getAssignmentRules: () => api.get('/lead-intelligence/assignment-rules'),
+  saveAssignmentRule: (data) =>
+    data?.id
+      ? api.patch(`/lead-intelligence/assignment-rules/${data.id}`, data)
+      : api.post('/lead-intelligence/assignment-rules', data),
+  deleteAssignmentRule: (id) => api.delete(`/lead-intelligence/assignment-rules/${id}`),
+  getLeadProfile: (leadId) => api.get(`/lead-intelligence/leads/${leadId}`),
+  recalculateLead: (leadId) => api.post(`/lead-intelligence/leads/${leadId}/recalculate`),
+  executeRecommendation: (leadId, recommendationId) =>
+    api.post(`/lead-intelligence/leads/${leadId}/recommendations/${recommendationId}/execute`),
+};
+
 // ==================== VISA RULES ====================
 export const visaRuleAPI = {
   getAll: (params = {}) => api.get('/visa-applications/rules', { params }),

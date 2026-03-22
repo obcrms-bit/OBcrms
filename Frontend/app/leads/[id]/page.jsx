@@ -28,7 +28,14 @@ import {
   ScheduleFollowUpModal,
 } from '@/components/leads/follow-up-modals';
 import { useAuth } from '@/context/AuthContext';
-import { authAPI, branchAPI, leadAPI, transferAPI } from '@/src/services/api';
+import LeadIntelligencePanel from '@/src/modules/lead-intelligence/components/LeadIntelligencePanel';
+import {
+  authAPI,
+  branchAPI,
+  leadAPI,
+  leadIntelligenceAPI,
+  transferAPI,
+} from '@/src/services/api';
 import { getEntityLabel, hasPermission } from '@/src/services/access';
 import {
   getLeadAssignees,
@@ -93,6 +100,7 @@ export default function LeadDetailPage() {
   const [branches, setBranches] = useState([]);
   const [workflow, setWorkflow] = useState(null);
   const [workflowStages, setWorkflowStages] = useState([]);
+  const [leadIntelligence, setLeadIntelligence] = useState(null);
   const [activeTab, setActiveTab] = useState('v2-profile');
   const [actionLoading, setActionLoading] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState('');
@@ -118,10 +126,11 @@ export default function LeadDetailPage() {
     setError('');
 
     try {
-      const [leadResponse, usersResponse, branchesResponse] = await Promise.all([
+      const [leadResponse, usersResponse, branchesResponse, aiResponse] = await Promise.all([
         leadAPI.getLeadById(leadId),
         canAssign || canTransfer ? authAPI.getUsers() : Promise.resolve(null),
         canTransfer ? branchAPI.getBranches() : Promise.resolve(null),
+        leadIntelligenceAPI.getLeadProfile(leadId).catch(() => null),
       ]);
       const nextLeadData = leadResponse.data?.data || {};
       const nextLead = nextLeadData.lead || null;
@@ -131,6 +140,7 @@ export default function LeadDetailPage() {
       const nextTransfers = nextLeadData.transfers || [];
       const nextUsers = usersResponse?.data?.data?.users || [];
       const nextBranches = branchesResponse?.data?.data || [];
+      const nextLeadIntelligence = aiResponse?.data?.data || null;
       const assigneeIdsFromLead =
         nextAssignments.map((assignment) => normalizeId(assignment.userId)) ||
         getLeadAssignees(nextLead).map((assignee) => normalizeId(assignee));
@@ -144,6 +154,7 @@ export default function LeadDetailPage() {
       setBranches(nextBranches);
       setWorkflow(nextWorkflow);
       setWorkflowStages(nextWorkflowStages);
+      setLeadIntelligence(nextLeadIntelligence);
       setSelectedStatus(nextLead?.status || '');
       setSelectedCounsellorId(nextPrimaryAssigneeId);
       setPrimaryAssigneeId(nextPrimaryAssigneeId);
@@ -327,6 +338,20 @@ export default function LeadDetailPage() {
     await runAction(
       () => leadAPI.recalculateScore(leadId),
       'Failed to recalculate lead score.'
+    );
+  };
+
+  const handleRefreshAi = async () => {
+    await runAction(
+      () => leadIntelligenceAPI.recalculateLead(leadId),
+      'Failed to refresh AI lead intelligence.'
+    );
+  };
+
+  const handleExecuteRecommendation = async (recommendationId) => {
+    await runAction(
+      () => leadIntelligenceAPI.executeRecommendation(leadId, recommendationId),
+      'Failed to execute the AI recommendation.'
     );
   };
 
@@ -560,6 +585,7 @@ export default function LeadDetailPage() {
               {[
                 ['v2-profile', '360 Workspace'],
                 ['overview', 'Overview'],
+                ['ai', 'AI Lead System'],
                 ['collaboration', 'Collaboration'],
                 ['timeline', 'Timeline'],
                 ['notes', 'Notes'],
@@ -689,6 +715,16 @@ export default function LeadDetailPage() {
               <div className="space-y-6 animate-in fade-in duration-300">
                 <ClientProfile id={leadId} type="lead" />
               </div>
+            ) : null}
+
+            {activeTab === 'ai' ? (
+              <LeadIntelligencePanel
+                profile={leadIntelligence}
+                loading={loading}
+                actionLoading={actionLoading}
+                onRefresh={handleRefreshAi}
+                onExecuteRecommendation={handleExecuteRecommendation}
+              />
             ) : null}
 
             {activeTab === 'collaboration' ? (

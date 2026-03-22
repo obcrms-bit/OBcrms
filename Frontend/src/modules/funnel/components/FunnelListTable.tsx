@@ -3,6 +3,7 @@
 import { ArrowRightLeft } from 'lucide-react';
 import { DataTableSurface, SectionHeader } from '@/components/app/design-system';
 import { EmptyState, StatusPill, formatDate, formatDateTime } from '@/components/app/shared';
+import LeadHealthPills from '@/src/modules/lead-intelligence/components/LeadHealthPills';
 import LeadAssignmentAvatars from './LeadAssignmentAvatars';
 import SlaIndicator from './SlaIndicator';
 import TransferBadge from './TransferBadge';
@@ -42,7 +43,7 @@ export default function FunnelListTable({
         </div>
       ) : (
         <div className="ds-table-wrap mt-6">
-          <table className="ds-table min-w-[1400px]">
+          <table className="ds-table min-w-[1600px]">
             <thead>
               <tr>
                 <th>
@@ -57,9 +58,11 @@ export default function FunnelListTable({
                 <th>Active Branch</th>
                 <th>Primary Assignee</th>
                 <th>All Assignees</th>
-                <th>Status</th>
+                <th>SLA</th>
+                <th>AI Health</th>
                 <th>Source</th>
                 <th>Next Follow-up</th>
+                <th>Next Action</th>
                 <th>Last Activity</th>
                 <th>Transfer</th>
               </tr>
@@ -101,8 +104,17 @@ export default function FunnelListTable({
                       slaHours={lead.currentFunnelStageId?.slaHours}
                     />
                   </td>
+                  <td>
+                    <LeadHealthPills
+                      score={lead.aiScore || lead.leadScore || 0}
+                      label={lead.aiScoreLabel || lead.leadCategory}
+                      temperature={lead.leadTemperature}
+                      priority={lead.priority}
+                    />
+                  </td>
                   <td>{lead.source || 'Unknown'}</td>
                   <td>{lead.nextFollowUp ? formatDate(lead.nextFollowUp) : 'Not scheduled'}</td>
+                  <td>{lead.metadata?.leadIntelligence?.recommendedNextAction || 'Review lead'}</td>
                   <td>{lead.updatedAt ? formatDateTime(lead.updatedAt) : 'No activity'}</td>
                   <td>
                     <TransferBadge

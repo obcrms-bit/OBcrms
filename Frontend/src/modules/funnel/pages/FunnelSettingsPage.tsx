@@ -90,6 +90,11 @@ export default function FunnelSettingsPage() {
     <AppShell
       title="Funnel Settings"
       description="Configure Funnel stages, movement rules, lost reasons, and automation triggers at the tenant level."
+      actions={
+        <a className="ds-button-secondary" href="/tenant/funnel/intelligence">
+          AI Lead System
+        </a>
+      }
     >
       {loading ? <LoadingState label="Loading Funnel settings..." /> : null}
       {!loading && error ? <ErrorState message={error} onRetry={loadSettings} /> : null}

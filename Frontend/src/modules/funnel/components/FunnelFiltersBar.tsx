@@ -21,7 +21,7 @@ export default function FunnelFiltersBar({
 }: FunnelFiltersBarProps) {
   return (
     <FilterToolbar>
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-7">
         <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 shadow-sm md:col-span-2 xl:col-span-2">
           <Search className="h-4 w-4 text-slate-400" />
           <input
@@ -77,6 +77,42 @@ export default function FunnelFiltersBar({
           <option value="branch">Assigned in my branch</option>
         </select>
 
+        <select
+          className="ds-field"
+          value={filters.priority}
+          onChange={(event) =>
+            onChange((current) => ({
+              ...current,
+              priority: event.target.value,
+            }))
+          }
+        >
+          <option value="">All priorities</option>
+          {['urgent', 'high', 'medium', 'low', 'stale', 'reactivation_candidate'].map((value) => (
+            <option key={value} value={value}>
+              {value.replace(/_/g, ' ')}
+            </option>
+          ))}
+        </select>
+
+        <select
+          className="ds-field"
+          value={filters.temperature}
+          onChange={(event) =>
+            onChange((current) => ({
+              ...current,
+              temperature: event.target.value,
+            }))
+          }
+        >
+          <option value="">All temperatures</option>
+          {['high_intent', 'hot', 'warm', 'warming', 'cooling', 'cold', 'stale'].map((value) => (
+            <option key={value} value={value}>
+              {value.replace(/_/g, ' ')}
+            </option>
+          ))}
+        </select>
+
         <label className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 shadow-sm">
           <input
             type="checkbox"
@@ -107,6 +143,9 @@ export default function FunnelFiltersBar({
           </Link>
           <Link className="ds-button-secondary" href="/tenant/funnel/settings">
             Funnel Settings
+          </Link>
+          <Link className="ds-button-secondary" href="/tenant/funnel/intelligence">
+            AI Lead System
           </Link>
         </div>
       </div>

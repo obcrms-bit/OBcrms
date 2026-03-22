@@ -31,6 +31,7 @@ const registerRoutes = (app) => {
   const visaExportRoutes = require('../../routes/visaExport.routes');
   const clientProfileRoutes = require('../../routes/clientProfile.routes');
   const courseAiRoutes = require('../../routes/courseAi.routes');
+  const leadIntelligenceRoutes = require('../../routes/leadIntelligence.routes');
 
   app.use('/api/auth', authRoutes);
   app.use('/api/students', studentRoutes);
@@ -64,6 +65,7 @@ const registerRoutes = (app) => {
   app.use('/api/visa-rules', visaRoutes);
   app.use('/api/client-profile', clientProfileRoutes);
   app.use('/api/course-ai', courseAiRoutes);
+  app.use('/api/lead-intelligence', leadIntelligenceRoutes);
 };
 
 module.exports = {

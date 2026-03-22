@@ -2,6 +2,7 @@
 
 import { Building2, CalendarClock, Flag } from 'lucide-react';
 import { formatDate } from '@/components/app/shared';
+import LeadHealthPills from '@/src/modules/lead-intelligence/components/LeadHealthPills';
 import LeadAssignmentAvatars from './LeadAssignmentAvatars';
 import SlaIndicator from './SlaIndicator';
 import TransferBadge from './TransferBadge';
@@ -62,6 +63,14 @@ export default function FunnelLeadCard({
               {lead?.nextFollowUp ? `Follow-up ${formatDate(lead.nextFollowUp)}` : 'No follow-up scheduled'}
             </span>
           </div>
+
+          <LeadHealthPills
+            score={lead?.aiScore || lead?.leadScore || 0}
+            label={lead?.aiScoreLabel || lead?.leadCategory}
+            temperature={lead?.leadTemperature}
+            priority={lead?.priority}
+            nextAction={lead?.metadata?.leadIntelligence?.recommendedNextAction}
+          />
 
           <div className="flex items-center justify-between gap-3">
             <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">

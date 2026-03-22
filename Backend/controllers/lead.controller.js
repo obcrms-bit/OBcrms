@@ -35,6 +35,11 @@ const {
   syncLeadAssignments,
 } = require('../services/leadCollaboration.service');
 const { buildBoardData, getStageByIdentifier, moveLeadToStage } = require('../services/funnel.service');
+const {
+  getLeadIntelligenceSettings,
+  maybeApplyCountryAssignment,
+  refreshLeadIntelligence,
+} = require('../services/leadIntelligence.service');
 
 const PIPELINE_STATUSES = [
   'new',
@@ -251,6 +256,13 @@ const sanitizeLeadPayload = (rawPayload = {}) => {
         .map((value) => normalizeString(value))
         .filter(Boolean)
       : undefined;
+  const interestedCountry =
+    normalizeString(
+      rawPayload.interestedCountry ||
+        rawPayload.countryInterest ||
+        rawPayload.country ||
+        preferredCountries?.[0]
+    ) || undefined;
 
   const tags = Array.isArray(rawPayload.tags)
     ? rawPayload.tags.map((value) => normalizeString(value)).filter(Boolean)
@@ -313,6 +325,7 @@ const sanitizeLeadPayload = (rawPayload = {}) => {
     preferredLocation: normalizeString(rawPayload.preferredLocation) || undefined,
     interestedCourse: normalizeString(rawPayload.interestedCourse) || undefined,
     preferredCountries,
+    interestedCountry,
     preferredStudyLevel: preferredStudyLevel || undefined,
     preferredIntake: normalizeString(rawPayload.preferredIntake) || undefined,
     budget: normalizeNumber(rawPayload.budget),
@@ -539,6 +552,25 @@ const addLeadActivity = (lead, type, description, performedBy, metadata = {}) =>
   lead.activities.push({ type, description, performedBy, metadata });
 };
 
+const refreshLeadAiSafely = async (companyId, lead, actorId = null, triggerType = 'ai_refresh') => {
+  if (!lead?._id) {
+    return null;
+  }
+
+  try {
+    return await refreshLeadIntelligence({
+      companyId,
+      lead,
+      actorId,
+      persist: true,
+      triggerType,
+    });
+  } catch (error) {
+    console.error('Lead intelligence refresh error:', error.message);
+    return null;
+  }
+};
+
 const buildAutoFollowUp = (workflow, actorId, counsellorName = '') => {
   if (!workflow?.followUpRules?.initialHours) {
     return null;
@@ -682,6 +714,8 @@ exports.getLeads = asyncHandler(async (req, res) => {
     sortBy = 'createdAt',
     sortOrder = 'desc',
     category,
+    priority,
+    temperature,
     fromDate,
     toDate,
     course,
@@ -710,6 +744,12 @@ exports.getLeads = asyncHandler(async (req, res) => {
   }
   if (category) {
     filterParts.push({ leadCategory: category });
+  }
+  if (priority) {
+    filterParts.push({ priority });
+  }
+  if (temperature) {
+    filterParts.push({ leadTemperature: temperature });
   }
   if (recordType) {
     filterParts.push({ recordType });
@@ -836,10 +876,11 @@ exports.getWorkflowOptions = asyncHandler(async (req, res) => {
 
 exports.createLead = asyncHandler(async (req, res) => {
   const payload = sanitizeLeadPayload(req.body);
-  const { workflow, workflowStages } = await resolveLeadWorkflow(
-    req.companyId,
-    payload.preferredCountries || []
-  );
+  const [intelligenceSettings, workflowResult] = await Promise.all([
+    getLeadIntelligenceSettings(req.companyId),
+    resolveLeadWorkflow(req.companyId, payload.preferredCountries || []),
+  ]);
+  const { workflow, workflowStages } = workflowResult;
   const allowedStageKeys = workflowStages.map((stage) => stage.key);
 
   if (payload.status && !allowedStageKeys.includes(payload.status)) {
@@ -853,7 +894,7 @@ exports.createLead = asyncHandler(async (req, res) => {
   }
 
   let autoMatch = null;
-  if (!payload.assignedCounsellor) {
+  if (!payload.assignedCounsellor && intelligenceSettings.autoAssignmentMode !== 'manual') {
     autoMatch = await findBestCounsellorMatch({
       companyId: req.companyId,
       branchId: payload.branchId || req.user?.branchId?._id || req.user?.branchId || null,
@@ -977,10 +1018,23 @@ exports.createLead = asyncHandler(async (req, res) => {
   }
 
   await lead.save();
+  const countryAssignmentResult = await maybeApplyCountryAssignment({
+    companyId: req.companyId,
+    lead,
+    actorId: req.user?._id || null,
+    triggerType: 'country_selected',
+    allowOverwrite: Boolean(req.body.overwriteAssignments),
+  });
   const assignments = await syncLeadAssignments(lead, {
     actorId: req.user?._id,
     reason: 'Lead created',
   });
+  const intelligence = await refreshLeadAiSafely(
+    req.companyId,
+    lead,
+    req.user?._id || null,
+    'ai_refresh'
+  );
   await logActivity(
     req.companyId,
     lead._id,
@@ -1009,6 +1063,8 @@ exports.createLead = asyncHandler(async (req, res) => {
     assignments,
     workflow,
     workflowStages,
+    intelligence,
+    countryAssignmentResult,
   });
 });
 
@@ -1060,10 +1116,14 @@ exports.updateLead = asyncHandler(async (req, res) => {
 
   const payload = sanitizeLeadPayload(req.body);
   await hydrateBranchName(req.companyId, payload);
-  const { workflow, workflowStages } = await resolveLeadWorkflow(
-    req.companyId,
-    payload.preferredCountries || lead.preferredCountries || []
-  );
+  const [intelligenceSettings, workflowResult] = await Promise.all([
+    getLeadIntelligenceSettings(req.companyId),
+    resolveLeadWorkflow(
+      req.companyId,
+      payload.preferredCountries || lead.preferredCountries || []
+    ),
+  ]);
+  const { workflow, workflowStages } = workflowResult;
   const allowedStageKeys = workflowStages.map((stage) => stage.key);
 
   if ((payload.status || payload.pipelineStage) && !allowedStageKeys.includes(payload.status || payload.pipelineStage)) {
@@ -1080,7 +1140,8 @@ exports.updateLead = asyncHandler(async (req, res) => {
   if (
     !payload.assignedCounsellor &&
     !lead.assignedCounsellor &&
-    (payload.preferredCountries || lead.preferredCountries)?.length
+    (payload.preferredCountries || lead.preferredCountries)?.length &&
+    intelligenceSettings.autoAssignmentMode !== 'manual'
   ) {
     const autoMatch = await findBestCounsellorMatch({
       companyId: req.companyId,
@@ -1110,6 +1171,8 @@ exports.updateLead = asyncHandler(async (req, res) => {
   const previousStatus = lead.status;
   const previousCounsellor = String(lead.assignedCounsellor || '');
   const previousPrimaryAssignee = String(lead.primaryAssigneeId || lead.assignedCounsellor || '');
+  const countryUpdated =
+    typeof payload.preferredCountries !== 'undefined' || typeof payload.interestedCountry !== 'undefined';
 
   Object.entries(payload).forEach(([key, value]) => {
     if (typeof value !== 'undefined') {
@@ -1181,10 +1244,25 @@ exports.updateLead = asyncHandler(async (req, res) => {
   }
 
   await lead.save();
+  const countryAssignmentResult = countryUpdated
+    ? await maybeApplyCountryAssignment({
+      companyId: req.companyId,
+      lead,
+      actorId: req.user?._id || null,
+      triggerType: 'country_changed',
+      allowOverwrite: Boolean(req.body.overwriteAssignments),
+    })
+    : { applied: false, countryRule: null };
   const assignments = await syncLeadAssignments(lead, {
     actorId: req.user?._id,
     reason: normalizeString(req.body.assignmentReason) || 'Lead updated',
   });
+  const intelligence = await refreshLeadAiSafely(
+    req.companyId,
+    lead,
+    req.user?._id || null,
+    'ai_refresh'
+  );
   await logActivity(req.companyId, lead._id, 'lead_updated', 'Lead updated', req.user?._id, {
     performedByName: req.user?.name,
     status: lead.status,
@@ -1196,6 +1274,8 @@ exports.updateLead = asyncHandler(async (req, res) => {
     assignments,
     workflow,
     workflowStages,
+    intelligence,
+    countryAssignmentResult,
   });
 });
 
@@ -1398,6 +1478,12 @@ exports.assignCounsellor = asyncHandler(async (req, res) => {
     actorId: req.user?._id,
     reason: normalizeString(reason) || 'Manual assignment',
   });
+  const intelligence = await refreshLeadAiSafely(
+    req.companyId,
+    lead,
+    req.user?._id || null,
+    'ai_refresh'
+  );
   await logActivity(
     req.companyId,
     lead._id,
@@ -1411,6 +1497,7 @@ exports.assignCounsellor = asyncHandler(async (req, res) => {
   sendSuccess(res, 200, 'Counsellor assigned', {
     lead: serializeLeadCollaboration(updatedLead),
     assignments,
+    intelligence,
   });
 });
 
@@ -1517,6 +1604,12 @@ exports.saveAssignments = asyncHandler(async (req, res) => {
     actorId: req.user?._id,
     reason: normalizeString(req.body.reason) || 'Lead assignees updated',
   });
+  const intelligence = await refreshLeadAiSafely(
+    req.companyId,
+    lead,
+    req.user?._id || null,
+    'ai_refresh'
+  );
   await logActivity(
     req.companyId,
     lead._id,
@@ -1534,6 +1627,7 @@ exports.saveAssignments = asyncHandler(async (req, res) => {
   sendSuccess(res, 200, 'Lead assignees updated', {
     lead: serializeLeadCollaboration(updatedLead),
     assignments,
+    intelligence,
   });
 });
 
@@ -1574,6 +1668,12 @@ exports.removeAssignment = asyncHandler(async (req, res) => {
     actorId: req.user?._id,
     reason: 'Lead assignee removed',
   });
+  const intelligence = await refreshLeadAiSafely(
+    req.companyId,
+    lead,
+    req.user?._id || null,
+    'ai_refresh'
+  );
   await logActivity(
     req.companyId,
     lead._id,
@@ -1591,6 +1691,7 @@ exports.removeAssignment = asyncHandler(async (req, res) => {
   sendSuccess(res, 200, 'Lead assignee removed', {
     lead: serializeLeadCollaboration(updatedLead),
     assignments,
+    intelligence,
   });
 });
 
@@ -1642,12 +1743,19 @@ exports.updateStatus = asyncHandler(async (req, res) => {
       req.companyId,
       lead.preferredCountries || []
     );
+    const intelligence = await refreshLeadAiSafely(
+      req.companyId,
+      lead,
+      req.user?._id || null,
+      'ai_refresh'
+    );
     const updatedLead = await populateLead(Lead.findById(lead._id));
     sendSuccess(res, 200, 'Funnel stage updated', {
       lead: serializeLeadCollaboration(updatedLead),
       targetStage,
       workflow,
       workflowStages,
+      intelligence,
     });
   } catch (error) {
     return sendError(res, 400, error.message, error.validationErrors || undefined);
@@ -1700,8 +1808,14 @@ exports.scheduleFollowUp = asyncHandler(async (req, res) => {
   lead.leadCategory = category;
 
   await lead.save();
+  const intelligence = await refreshLeadAiSafely(
+    req.companyId,
+    lead,
+    req.user?._id || null,
+    'ai_refresh'
+  );
   const updatedLead = await populateLead(Lead.findById(lead._id));
-  sendSuccess(res, 200, 'Follow-up scheduled', { lead: updatedLead });
+  sendSuccess(res, 200, 'Follow-up scheduled', { lead: updatedLead, intelligence });
 });
 
 exports.completeFollowUp = asyncHandler(async (req, res) => {
@@ -1832,6 +1946,12 @@ exports.completeFollowUp = asyncHandler(async (req, res) => {
   lead.leadCategory = category;
 
   await lead.save();
+  const intelligence = await refreshLeadAiSafely(
+    req.companyId,
+    lead,
+    req.user?._id || null,
+    'ai_refresh'
+  );
   await logActivity(
     req.companyId,
     lead._id,
@@ -1851,6 +1971,7 @@ exports.completeFollowUp = asyncHandler(async (req, res) => {
   sendSuccess(res, 200, 'Follow-up completed successfully', {
     lead: updatedLead,
     student,
+    intelligence,
   });
 });
 
@@ -1880,8 +2001,14 @@ exports.addNote = asyncHandler(async (req, res) => {
   lead.leadCategory = category;
 
   await lead.save();
+  const intelligence = await refreshLeadAiSafely(
+    req.companyId,
+    lead,
+    req.user?._id || null,
+    'ai_refresh'
+  );
   const updatedLead = await populateLead(Lead.findById(lead._id));
-  sendSuccess(res, 201, 'Note added', { lead: updatedLead });
+  sendSuccess(res, 201, 'Note added', { lead: updatedLead, intelligence });
 });
 
 exports.convertToStudent = asyncHandler(async (req, res) => {
@@ -1899,6 +2026,12 @@ exports.convertToStudent = asyncHandler(async (req, res) => {
 
   const { student } = await convertLeadDocumentToStudent(lead, req.user);
   await lead.save();
+  const intelligence = await refreshLeadAiSafely(
+    req.companyId,
+    lead,
+    req.user?._id || null,
+    'ai_refresh'
+  );
   await logActivity(
     req.companyId,
     lead._id,
@@ -1909,7 +2042,7 @@ exports.convertToStudent = asyncHandler(async (req, res) => {
   );
 
   const updatedLead = await populateLead(Lead.findById(lead._id));
-  sendSuccess(res, 200, 'Lead converted to student', { lead: updatedLead, student });
+  sendSuccess(res, 200, 'Lead converted to student', { lead: updatedLead, student, intelligence });
 });
 
 const getFollowUpUrgency = (followUp) => {
@@ -2341,18 +2474,23 @@ exports.recalculateScore = asyncHandler(async (req, res) => {
     return sendError(res, 403, 'You do not have permission to recalculate this lead score.');
   }
 
-  const { score, category, breakdown } = calculateLeadScore(lead);
-  lead.leadScore = score;
-  lead.leadCategory = category;
+  const intelligence = await refreshLeadIntelligence({
+    companyId: req.companyId,
+    lead,
+    actorId: req.user?._id || null,
+    persist: true,
+    triggerType: 'ai_refresh',
+  });
+
   addLeadActivity(
     lead,
     'score_updated',
-    `Lead score recalculated: ${score} (${category})`,
+    `Lead score recalculated: ${intelligence.score} (${intelligence.label})`,
     req.user?._id
   );
   await lead.save();
 
-  sendSuccess(res, 200, 'Score recalculated', { score, category, breakdown });
+  sendSuccess(res, 200, 'Score recalculated', intelligence);
 });
 
 exports.lockOwnership = asyncHandler(async (req, res) => {

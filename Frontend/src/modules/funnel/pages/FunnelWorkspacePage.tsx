@@ -16,6 +16,8 @@ const INITIAL_FILTERS = {
   search: '',
   stageKey: '',
   assigneeScope: '',
+  priority: '',
+  temperature: '',
   overdueOnly: false,
 };
 

@@ -140,6 +140,15 @@ const buildLeadFilter = async (companyId, user, query = {}) => {
   if (query.source) {
     filterParts.push({ source: query.source });
   }
+  if (query.priority) {
+    filterParts.push({ priority: query.priority });
+  }
+  if (query.temperature) {
+    filterParts.push({ leadTemperature: query.temperature });
+  }
+  if (query.reactivationOnly) {
+    filterParts.push({ priority: 'reactivation_candidate' });
+  }
   if (query.overdueOnly) {
     filterParts.push({ nextFollowUp: { $lt: new Date() } });
   }

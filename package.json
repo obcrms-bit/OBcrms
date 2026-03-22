@@ -46,7 +46,7 @@
     "author": "Trust Education",
     "license": "ISC",
     "engines": {
-        "node": ">=18.18.0"
+        "node": "20.x"
     },
     "devDependencies": {
         "@eslint/js": "^9.39.4",

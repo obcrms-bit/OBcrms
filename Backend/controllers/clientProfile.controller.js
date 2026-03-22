@@ -8,6 +8,7 @@ const CallLog = require('../models/CallLog');
 const OfficeVisit = require('../models/OfficeVisit');
 const LeadActivityLog = require('../models/LeadActivityLog');
 const CourseRecommendation = require('../models/CourseRecommendation');
+const { refreshLeadIntelligence } = require('../services/leadIntelligence.service');
 
 exports.getFullProfile = async (req, res) => {
   try {
@@ -108,6 +109,18 @@ exports.addCallLog = async (req, res) => {
     else callLog.leadId = id;
 
     await callLog.save();
+    if (type !== 'student') {
+      const lead = await Lead.findById(id);
+      if (lead) {
+        await refreshLeadIntelligence({
+          companyId: lead.companyId,
+          lead,
+          actorId: req.user?._id || req.user?.id || null,
+          persist: true,
+          triggerType: 'ai_refresh',
+        });
+      }
+    }
 
     res.status(201).json({ success: true, data: callLog });
   } catch (error) {
@@ -130,6 +143,18 @@ exports.addOfficeVisit = async (req, res) => {
     else visit.leadId = id;
 
     await visit.save();
+    if (type !== 'student') {
+      const lead = await Lead.findById(id);
+      if (lead) {
+        await refreshLeadIntelligence({
+          companyId: lead.companyId,
+          lead,
+          actorId: req.user?._id || req.user?.id || null,
+          persist: true,
+          triggerType: 'ai_refresh',
+        });
+      }
+    }
 
     res.status(201).json({ success: true, data: visit });
   } catch (error) {

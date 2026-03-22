@@ -386,8 +386,24 @@ const leadSchema = new mongoose.Schema(
       country: { type: String, trim: true },
     },
     interestedCountry: { type: String, trim: true },
-    priority: { type: String, enum: ['low', 'medium', 'high', 'urgent'], default: 'medium' },
+    priority: {
+      type: String,
+      enum: ['low', 'medium', 'high', 'urgent', 'stale', 'reactivation_candidate'],
+      default: 'medium',
+    },
     aiScore: { type: Number, min: 0, max: 100, default: 0 },
+    aiScoreLabel: {
+      type: String,
+      enum: ['cold', 'warm', 'hot', 'high_intent', 'at_risk'],
+      default: 'cold',
+    },
+    aiConfidence: { type: Number, min: 0, max: 1, default: null },
+    leadTemperature: {
+      type: String,
+      enum: ['cold', 'warming', 'warm', 'hot', 'high_intent', 'cooling', 'stale'],
+      default: 'cold',
+    },
+    lastAiScoredAt: { type: Date, default: null },
     formId: { type: mongoose.Schema.Types.ObjectId, ref: 'PublicLeadForm', index: true },
     metadata: { type: mongoose.Schema.Types.Mixed },
   },
@@ -558,6 +574,10 @@ leadSchema.index({ companyId: 1, activeBranchId: 1, primaryAssigneeId: 1 });
 leadSchema.index({ companyId: 1, serviceType: 1, entityType: 1 });
 leadSchema.index({ companyId: 1, ownershipLocked: 1 });
 leadSchema.index({ companyId: 1, createdAt: -1 });
+leadSchema.index({ companyId: 1, aiScore: -1 });
+leadSchema.index({ companyId: 1, aiScoreLabel: 1 });
+leadSchema.index({ companyId: 1, leadTemperature: 1 });
+leadSchema.index({ companyId: 1, priority: 1 });
 leadSchema.index({
   firstName: 'text',
   lastName: 'text',
