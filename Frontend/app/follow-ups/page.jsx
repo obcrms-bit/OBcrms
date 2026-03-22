@@ -1,8 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import AppShell from '@/components/app/app-shell';
+import {
+  DataTableSurface,
+  FilterToolbar,
+  SectionHeader,
+} from '@/components/app/design-system';
 import {
   EmptyState,
   ErrorState,
@@ -37,7 +42,7 @@ export default function FollowUpsPage() {
 
   const canTriggerReminderSweep = ['super_admin', 'admin', 'manager'].includes(user?.role);
 
-  const loadPage = async () => {
+  const loadPage = useCallback(async () => {
     try {
       setActionError('');
       await loadFollowUps({
@@ -52,7 +57,7 @@ export default function FollowUpsPage() {
           'Failed to load follow-up data.'
       );
     }
-  };
+  }, [filters.search, filters.status, loadFollowUps]);
 
   const error = actionError || storeError;
 
@@ -60,8 +65,7 @@ export default function FollowUpsPage() {
     if (user?.role) {
       loadPage();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.role]);
+  }, [loadPage, user?.role]);
 
   const summaryCards = useMemo(
     () => [
@@ -142,7 +146,7 @@ export default function FollowUpsPage() {
               type="button"
               onClick={handleTriggerReminderSweep}
               disabled={runningReminderSweep}
-              className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              className="ds-button-secondary"
             >
               {runningReminderSweep ? 'Running reminders...' : 'Run reminder sweep'}
             </button>
@@ -150,7 +154,7 @@ export default function FollowUpsPage() {
           <button
             type="button"
             onClick={loadPage}
-            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+            className="ds-button-primary"
           >
             Refresh
           </button>
@@ -171,10 +175,10 @@ export default function FollowUpsPage() {
           ))}
         </div>
 
-        <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <FilterToolbar>
           <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px_auto]">
             <input
-              className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-teal-500 focus:bg-white"
+              className="ds-field"
               placeholder="Search lead, email, phone, counsellor, or branch"
               value={filters.search}
               onChange={(event) =>
@@ -182,7 +186,7 @@ export default function FollowUpsPage() {
               }
             />
             <select
-              className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-teal-500 focus:bg-white"
+              className="ds-field"
               value={filters.status}
               onChange={(event) =>
                 setFilters((current) => ({ ...current, status: event.target.value }))
@@ -196,29 +200,24 @@ export default function FollowUpsPage() {
             <button
               type="button"
               onClick={loadPage}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              className="ds-button-secondary"
             >
               <RefreshCw className="h-4 w-4" />
               Apply
             </button>
           </div>
-        </section>
+        </FilterToolbar>
 
         {loadingFollowUps ? <LoadingState label="Loading follow-up queue..." /> : null}
         {!loadingFollowUps ? (
           <>
           {error ? <ErrorState message={error} onRetry={loadPage} /> : null}
-          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                  Follow-up Queue
-                </p>
-                <h3 className="mt-2 text-xl font-semibold text-slate-900">
-                  {followUps.length} follow-ups loaded
-                </h3>
-              </div>
-            </div>
+          <DataTableSurface>
+            <SectionHeader
+              eyebrow="Follow-up Queue"
+              title={`${followUps.length} follow-ups loaded`}
+              description="Track scheduled touchpoints, reminder status, and completion outcomes in one operational queue."
+            />
 
             {followUps.length === 0 ? (
               <div className="mt-6">
@@ -228,44 +227,44 @@ export default function FollowUpsPage() {
                 />
               </div>
             ) : (
-              <div className="mt-6 overflow-x-auto">
-                <table className="w-full min-w-[1100px] text-left">
-                  <thead className="border-b border-slate-200 text-xs uppercase tracking-[0.2em] text-slate-500">
+              <div className="ds-table-wrap mt-6">
+                <table className="ds-table min-w-[1100px]">
+                  <thead>
                     <tr>
-                      <th className="pb-3">Lead</th>
-                      <th className="pb-3">Counsellor</th>
-                      <th className="pb-3">Scheduled</th>
-                      <th className="pb-3">Method</th>
-                      <th className="pb-3">Reminder</th>
-                      <th className="pb-3">Status</th>
-                      <th className="pb-3 text-right">Actions</th>
+                      <th>Lead</th>
+                      <th>Counsellor</th>
+                      <th>Scheduled</th>
+                      <th>Method</th>
+                      <th>Reminder</th>
+                      <th>Status</th>
+                      <th className="text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody>
                     {followUps.map((item) => (
                       <tr key={item._id}>
-                        <td className="py-4">
+                        <td>
                           <div className="font-semibold text-slate-900">{item.leadName}</div>
                           <div className="text-sm text-slate-500">
                             {item.mobile || item.phone || item.email || 'No contact info'}
                           </div>
                         </td>
-                        <td className="py-4 text-sm text-slate-600">
+                        <td>
                           {item.assignedCounsellor?.name || 'Unassigned'}
                         </td>
-                        <td className="py-4 text-sm text-slate-600">
+                        <td>
                           {formatDateTime(item.scheduledAt)}
                         </td>
-                        <td className="py-4 text-sm text-slate-600 capitalize">
+                        <td className="capitalize">
                           {String(item.followUp?.completionMethod || item.followUp?.type || 'call').replace(/_/g, ' ')}
                         </td>
-                        <td className="py-4 text-sm text-slate-600">
+                        <td>
                           {item.reminderMeta?.reminderStatus || 'pending'}
                           {item.reminderMeta?.reminderCount
                             ? ` (${item.reminderMeta.reminderCount})`
                             : ''}
                         </td>
-                        <td className="py-4">
+                        <td>
                           <div className="flex flex-wrap gap-2">
                             <StatusPill tone={item.urgency}>{item.urgency.replace(/_/g, ' ')}</StatusPill>
                             <StatusPill tone={item.status}>{item.status}</StatusPill>
@@ -279,8 +278,8 @@ export default function FollowUpsPage() {
                         <td className="py-4">
                           <div className="flex justify-end gap-2">
                             <Link
-                              href={`/leads/${item.leadId}`}
-                              className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                              href={`/tenant/leads/${item.leadId}`}
+                              className="ds-button-secondary px-3 py-2"
                             >
                               View Lead
                             </Link>
@@ -288,7 +287,7 @@ export default function FollowUpsPage() {
                               <button
                                 type="button"
                                 onClick={() => setSelectedItem(item)}
-                                className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+                                className="ds-button-primary px-3 py-2"
                               >
                                 Mark Done
                               </button>
@@ -301,7 +300,7 @@ export default function FollowUpsPage() {
                 </table>
               </div>
             )}
-          </section>
+          </DataTableSurface>
           </>
         ) : null}
       </div>

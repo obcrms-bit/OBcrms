@@ -9,6 +9,9 @@ const {
   normalizeRoleKey,
 } = require('../constants/rbac');
 
+const EFFECTIVE_ACCESS_CACHE_TTL_MS = 15 * 1000;
+const effectiveAccessCache = new Map();
+
 const MODULE_ACTION_ALIASES = {
   dashboards: 'dashboards',
   dashboard: 'dashboards',
@@ -57,6 +60,29 @@ const toObjectIdString = (value) => {
 
 const uniq = (items) => Array.from(new Set(items.filter(Boolean).map(String)));
 
+const getEffectiveAccessCacheKey = (user) =>
+  [
+    toObjectIdString(user?._id),
+    toObjectIdString(user?.companyId),
+    normalizeRoleKey(user?.primaryRoleKey || user?.role),
+    toObjectIdString(user?.roleId),
+    Array.isArray(user?.permissionBundleIds)
+      ? user.permissionBundleIds.map((value) => toObjectIdString(value)).sort().join(',')
+      : '',
+    String(Boolean(user?.isHeadOffice)),
+    String(Boolean(user?.managerEnabled)),
+    user?.updatedAt ? new Date(user.updatedAt).getTime() : '',
+  ].join(':');
+
+const pruneEffectiveAccessCache = () => {
+  const now = Date.now();
+  for (const [key, entry] of effectiveAccessCache.entries()) {
+    if (!entry || entry.expiresAt <= now) {
+      effectiveAccessCache.delete(key);
+    }
+  }
+};
+
 const normalizePermissions = (permissions = []) =>
   permissions
     .filter((permission) => permission?.module)
@@ -97,6 +123,12 @@ const resolveRoleAndBundles = async (user) => {
 };
 
 const buildEffectiveAccess = async (user) => {
+  const cacheKey = getEffectiveAccessCacheKey(user);
+  const cachedEntry = effectiveAccessCache.get(cacheKey);
+  if (cachedEntry && cachedEntry.expiresAt > Date.now()) {
+    return cachedEntry.value;
+  }
+
   const { normalizedRoleKey, template, roleDoc, permissionBundles } = await resolveRoleAndBundles(user);
   const effectivePermissions = normalizePermissions(
     mergePermissionSets(
@@ -114,7 +146,7 @@ const buildEffectiveAccess = async (user) => {
     user.fieldAccessOverrides || {}
   );
 
-  return {
+  const effectiveAccess = {
     roleKey: normalizedRoleKey,
     roleName: roleDoc?.name || template?.name || user.role,
     isHeadOffice: Boolean(user.isHeadOffice || roleDoc?.isHeadOffice || template?.isHeadOffice),
@@ -127,6 +159,17 @@ const buildEffectiveAccess = async (user) => {
       name: bundle.name,
     })),
   };
+
+  if (effectiveAccessCache.size > 500) {
+    pruneEffectiveAccessCache();
+  }
+
+  effectiveAccessCache.set(cacheKey, {
+    value: effectiveAccess,
+    expiresAt: Date.now() + EFFECTIVE_ACCESS_CACHE_TTL_MS,
+  });
+
+  return effectiveAccess;
 };
 
 const getPermissionMatch = (permissions = [], moduleKey, action) => {

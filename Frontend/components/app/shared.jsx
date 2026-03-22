@@ -146,11 +146,14 @@ export const upsertById = (items, nextItem) => {
   return nextItems;
 };
 
-export function StatusPill({ children, tone = 'new', className }) {
+/**
+ * @param {{ children: any; tone?: string; className?: string }} props
+ */
+export function StatusPill({ children, tone = 'new', className = '' }) {
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold',
+        'inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold shadow-sm ring-1 ring-inset ring-white/60',
         STAGE_STYLES[tone] || 'bg-slate-100 text-slate-700',
         className
       )}
@@ -160,28 +163,31 @@ export function StatusPill({ children, tone = 'new', className }) {
   );
 }
 
+/**
+ * @param {{ icon: any; label: any; value: any; helper?: any; accent?: string }} props
+ */
 export function MetricCard({
   icon: Icon,
   label,
   value,
-  helper,
+  helper = '',
   accent = 'bg-slate-900',
 }) {
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="ds-surface overflow-hidden">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+          <p className="ds-stat-label">
             {label}
           </p>
-          <p className="mt-3 text-3xl font-semibold text-slate-900">{value}</p>
+          <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">{value}</p>
           {helper ? (
             <p className="mt-2 text-sm text-slate-500">{helper}</p>
           ) : null}
         </div>
         <div
           className={cn(
-            'flex h-11 w-11 items-center justify-center rounded-2xl text-white shadow-sm',
+            'flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-lg shadow-slate-200/70',
             accent
           )}
         >
@@ -192,20 +198,26 @@ export function MetricCard({
   );
 }
 
+/**
+ * @param {{ label?: string }} props
+ */
 export function LoadingState({ label = 'Loading workspace...' }) {
   return (
-    <div className="flex min-h-[280px] items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-white/70 p-8">
-      <div className="flex items-center gap-3 text-slate-600">
-        <Loader2 className="h-5 w-5 animate-spin" />
+    <div className="ds-empty-panel flex min-h-[280px] items-center justify-center">
+      <div className="flex items-center gap-3 rounded-full border border-slate-200 bg-slate-50 px-5 py-3 text-slate-600 shadow-sm">
+        <Loader2 className="h-5 w-5 animate-spin text-teal-600" />
         <span className="text-sm font-medium">{label}</span>
       </div>
     </div>
   );
 }
 
-export function ErrorState({ message, onRetry }) {
+/**
+ * @param {{ message: any; onRetry?: (() => void) | null }} props
+ */
+export function ErrorState({ message, onRetry = null }) {
   return (
-    <div className="rounded-3xl border border-rose-200 bg-rose-50 p-6">
+    <div className="rounded-[1.75rem] border border-rose-200 bg-[linear-gradient(135deg,#fff5f5_0%,#fff1f2_100%)] p-6 shadow-[var(--ds-shadow-soft)]">
       <div className="flex items-start gap-3">
         <AlertCircle className="mt-0.5 h-5 w-5 text-rose-600" />
         <div>
@@ -215,7 +227,7 @@ export function ErrorState({ message, onRetry }) {
           <p className="mt-1 text-sm text-rose-600">{message}</p>
           {onRetry ? (
             <button
-              className="mt-4 rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-700"
+              className="ds-button mt-4 bg-rose-600 text-white hover:bg-rose-700"
               onClick={onRetry}
               type="button"
             >
@@ -228,16 +240,25 @@ export function ErrorState({ message, onRetry }) {
   );
 }
 
+/**
+ * @param {{
+ *   title: any;
+ *   description: any;
+ *   actionLabel?: any;
+ *   onAction?: (() => void) | null;
+ *   icon?: any;
+ * }} props
+ */
 export function EmptyState({
   title,
   description,
-  actionLabel,
-  onAction,
+  actionLabel = '',
+  onAction = null,
   icon: Icon = Inbox,
 }) {
   return (
-    <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-10 text-center">
-      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-500">
+    <div className="ds-empty-panel">
+      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-slate-100 text-slate-500 shadow-inner">
         <Icon className="h-6 w-6" />
       </div>
       <h3 className="mt-5 text-lg font-semibold text-slate-900">{title}</h3>
@@ -246,7 +267,7 @@ export function EmptyState({
       </p>
       {actionLabel && onAction ? (
         <button
-          className="mt-5 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+          className="ds-button-primary mt-5"
           onClick={onAction}
           type="button"
         >

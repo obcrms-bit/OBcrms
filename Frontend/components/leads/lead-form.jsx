@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
+import { SectionHeader } from '@/components/app/design-system';
 
 export const LEAD_SOURCES = [
   'website',
@@ -196,14 +197,14 @@ const Field = ({ label, required, children, hint }) => (
 const Input = (props) => (
   <input
     {...props}
-    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-teal-500 focus:bg-white"
+    className="ds-field w-full"
   />
 );
 
 const Select = ({ children, ...props }) => (
   <select
     {...props}
-    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-teal-500 focus:bg-white"
+    className="ds-field w-full"
   >
     {children}
   </select>
@@ -212,7 +213,7 @@ const Select = ({ children, ...props }) => (
 const Textarea = (props) => (
   <textarea
     {...props}
-    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-teal-500 focus:bg-white"
+    className="ds-field w-full"
   />
 );
 
@@ -223,7 +224,9 @@ export default function LeadForm({
   countryWorkflows = [],
   submitting = false,
   submitLabel = 'Save lead',
+  cancelLabel = 'Cancel',
   mode = 'create',
+  onCancel,
   onSubmit,
 }) {
   const [form, setForm] = useState(createLeadFormDefaults());
@@ -326,8 +329,12 @@ export default function LeadForm({
         </div>
       ) : null}
 
-      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h3 className="text-lg font-semibold text-slate-900">Personal Info</h3>
+      <section className="ds-surface">
+        <SectionHeader
+          eyebrow="Section 1"
+          title="Personal Info"
+          description="Identity, contact channels, and household context used throughout the counselling workflow."
+        />
         <div className="mt-5 grid gap-4 md:grid-cols-2">
           <Field
             label="Service Type"
@@ -433,8 +440,12 @@ export default function LeadForm({
         </label>
       </section>
 
-      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h3 className="text-lg font-semibold text-slate-900">Interested Info</h3>
+      <section className="ds-surface">
+        <SectionHeader
+          eyebrow="Section 2"
+          title="Interested Info"
+          description="Academic intent, course level, and country preferences that drive matching and routing."
+        />
         <div className="mt-5 grid gap-4 md:grid-cols-2">
           <Field label="Interested For" required>
             <Input
@@ -501,7 +512,7 @@ export default function LeadForm({
           </Field>
         </div>
         {activeWorkflow ? (
-          <div className="mt-5 rounded-3xl border border-teal-100 bg-teal-50/60 p-5">
+          <div className="mt-5 rounded-3xl border border-teal-100 bg-teal-50/60 p-5 shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-700">
               Country Workflow Preview
             </p>
@@ -533,8 +544,12 @@ export default function LeadForm({
         ) : null}
       </section>
 
-      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h3 className="text-lg font-semibold text-slate-900">Other Info</h3>
+      <section className="ds-surface">
+        <SectionHeader
+          eyebrow="Section 3"
+          title="Other Info"
+          description="Campaign, branch, ownership, and stream metadata that keeps reporting and assignment intact."
+        />
         <div className="mt-5 grid gap-4 md:grid-cols-2">
           <Field label="Campaign">
             <Input value={form.campaign} onChange={(event) => setField('campaign', event.target.value)} />
@@ -585,8 +600,12 @@ export default function LeadForm({
         </div>
       </section>
 
-      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h3 className="text-lg font-semibold text-slate-900">Preparation Info</h3>
+      <section className="ds-surface">
+        <SectionHeader
+          eyebrow="Section 4"
+          title="Preparation Info"
+          description="Preparation background and performance inputs that support counselling decisions."
+        />
         <div className="mt-5 grid gap-4 md:grid-cols-3">
           <Field label="Preparation Class">
             <Input
@@ -609,18 +628,17 @@ export default function LeadForm({
         </div>
       </section>
 
-      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h3 className="text-lg font-semibold text-slate-900">Qualification Info</h3>
-            <p className="mt-1 text-sm text-slate-500">
-              Add as many education records as needed.
-            </p>
-          </div>
+      <section className="ds-surface">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <SectionHeader
+            eyebrow="Section 5"
+            title="Qualification Info"
+            description="Repeatable academic history rows are preserved in the same payload order sent to the backend."
+          />
           <button
             type="button"
             onClick={addQualification}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+            className="ds-button-secondary"
           >
             <Plus className="h-4 w-4" />
             Add Row
@@ -628,13 +646,16 @@ export default function LeadForm({
         </div>
         <div className="mt-5 space-y-4">
           {form.qualifications.map((qualification, index) => (
-            <div key={`qualification-${index}`} className="rounded-3xl border border-slate-200 p-4">
+            <div
+              key={`qualification-${index}`}
+              className="rounded-3xl border border-slate-200 bg-slate-50/60 p-4"
+            >
               <div className="flex items-center justify-between gap-4">
                 <p className="text-sm font-semibold text-slate-700">Qualification {index + 1}</p>
                 <button
                   type="button"
                   onClick={() => removeQualification(index)}
-                  className="inline-flex items-center gap-2 rounded-xl border border-rose-200 px-3 py-2 text-sm font-semibold text-rose-600 transition hover:bg-rose-50"
+                  className="ds-button-danger"
                 >
                   <Trash2 className="h-4 w-4" />
                   Remove
@@ -695,10 +716,12 @@ export default function LeadForm({
         </div>
       </section>
 
-      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h3 className="text-lg font-semibold text-slate-900">
-          {mode === 'create' ? 'Initial Notes' : 'Add New Note'}
-        </h3>
+      <section className="ds-surface">
+        <SectionHeader
+          eyebrow="Section 6"
+          title={mode === 'create' ? 'Initial Notes' : 'Add New Note'}
+          description="Notes are preserved as the same structured entries consumed by the follow-up timeline."
+        />
         <Textarea
           rows={4}
           value={form.initialNote}
@@ -707,14 +730,30 @@ export default function LeadForm({
         />
       </section>
 
-      <div className="flex justify-end">
-        <button
-          type="submit"
-          disabled={submitting}
-          className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {submitting ? 'Saving...' : submitLabel}
-        </button>
+      <div className="sticky bottom-4 z-10 rounded-[1.75rem] border border-slate-200 bg-white/95 p-4 shadow-[var(--ds-shadow-medium)] backdrop-blur">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <p className="text-sm text-slate-500">
+            Required fields, duplicate checks, and qualification row mapping are preserved in the current workflow.
+          </p>
+          <div className="flex flex-wrap justify-end gap-3">
+            {onCancel ? (
+              <button
+                type="button"
+                onClick={onCancel}
+                className="ds-button-secondary"
+              >
+                {cancelLabel}
+              </button>
+            ) : null}
+            <button
+              type="submit"
+              disabled={submitting}
+              className="ds-button-primary"
+            >
+              {submitting ? 'Saving...' : submitLabel}
+            </button>
+          </div>
+        </div>
       </div>
     </form>
   );

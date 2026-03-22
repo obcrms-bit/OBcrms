@@ -8,6 +8,10 @@ const AuditLog = require('../models/AuditLog');
 const { sendSuccess, sendError } = require('../utils/responseHandler');
 const { hasPermission } = require('../services/accessControl.service');
 const { createNotification } = require('../services/notification.service');
+const {
+  syncLeadAssignments,
+  syncLeadTransferRecord,
+} = require('../services/leadCollaboration.service');
 
 const normalizeString = (value) => (value === null || typeof value === 'undefined' ? '' : String(value).trim());
 
@@ -32,9 +36,12 @@ const applyTransferToLead = async (lead, transfer, actor) => {
   }).select('name');
 
   lead.branchId = transfer.toBranchId;
+  lead.activeBranchId = transfer.toBranchId;
   lead.branchName = targetBranch?.name || lead.branchName;
   lead.assignedCounsellor = transfer.toAssigneeId || null;
   lead.assignedTo = transfer.toAssigneeId || null;
+  lead.primaryAssigneeId = transfer.toAssigneeId || null;
+  lead.assigneeIds = transfer.toAssigneeId ? [transfer.toAssigneeId] : [];
   lead.ownerUserId = transfer.toAssigneeId || actor?._id;
   lead.sharedWithBranchIds = [];
   if (transfer.toAssigneeId) {
@@ -62,6 +69,10 @@ const applyTransferToLead = async (lead, transfer, actor) => {
   });
 
   await lead.save();
+  await syncLeadAssignments(lead, {
+    actorId: actor?._id,
+    reason: `Transferred to ${targetBranch?.name || 'target branch'}`,
+  });
 };
 
 exports.getTransferRequests = async (req, res) => {
@@ -168,6 +179,22 @@ exports.createTransferRequest = async (req, res) => {
     if (requiresApproval) {
       appendTransferHistory(lead, transfer, req.user._id, 'pending');
       await lead.save();
+      await syncLeadTransferRecord({
+        companyId: req.companyId,
+        leadId: lead._id,
+        sourceTransferRequestId: transfer._id,
+        fromBranchId: transfer.fromBranchId,
+        toBranchId: transfer.toBranchId,
+        transferReason: transfer.reason,
+        transferStatus: 'pending',
+        requestedBy: transfer.requestedBy,
+        approvedBy: transfer.approvedBy,
+        toAssigneeId: transfer.toAssigneeId,
+        requestedAt: transfer.requestedAt,
+        metadata: {
+          requiresApproval,
+        },
+      });
       await createNotification({
         companyId: req.companyId,
         branchId: toBranchId,
@@ -176,7 +203,7 @@ exports.createTransferRequest = async (req, res) => {
         message: `Transfer requested for ${lead.name || lead.firstName || 'lead'} to ${targetBranch.name}.`,
         entityType: 'transfer',
         entityId: transfer._id,
-        link: '/transfers',
+        link: '/tenant/transfers',
         metadata: {
           leadId: lead._id,
           fromBranchId: lead.branchId,
@@ -187,6 +214,23 @@ exports.createTransferRequest = async (req, res) => {
       transfer.approvedBy = req.user._id;
       await transfer.save();
       await applyTransferToLead(lead, transfer, req.user);
+      await syncLeadTransferRecord({
+        companyId: req.companyId,
+        leadId: lead._id,
+        sourceTransferRequestId: transfer._id,
+        fromBranchId: transfer.fromBranchId,
+        toBranchId: transfer.toBranchId,
+        transferReason: transfer.reason,
+        transferStatus: 'completed',
+        requestedBy: transfer.requestedBy,
+        approvedBy: req.user._id,
+        toAssigneeId: transfer.toAssigneeId,
+        requestedAt: transfer.requestedAt,
+        transferredAt: transfer.completedAt || new Date(),
+        metadata: {
+          requiresApproval,
+        },
+      });
       await createNotification({
         companyId: req.companyId,
         userId: transfer.requestedBy,
@@ -196,7 +240,7 @@ exports.createTransferRequest = async (req, res) => {
         message: `${lead.name || lead.firstName || 'Lead'} moved to ${targetBranch.name}.`,
         entityType: 'transfer',
         entityId: transfer._id,
-        link: '/transfers',
+        link: '/tenant/transfers',
       });
     }
 
@@ -274,6 +318,23 @@ exports.approveTransferRequest = async (req, res) => {
       notes: 'Transfer applied',
     });
     await transfer.save();
+    await syncLeadTransferRecord({
+      companyId: req.companyId,
+      leadId: lead._id,
+      sourceTransferRequestId: transfer._id,
+      fromBranchId: transfer.fromBranchId,
+      toBranchId: transfer.toBranchId,
+      transferReason: transfer.reason,
+      transferStatus: 'completed',
+      requestedBy: transfer.requestedBy,
+      approvedBy: req.user._id,
+      toAssigneeId: transfer.toAssigneeId,
+      requestedAt: transfer.requestedAt,
+      transferredAt: transfer.completedAt || new Date(),
+      metadata: {
+        historyLength: transfer.history.length,
+      },
+    });
 
     await createNotification({
       companyId: req.companyId,
@@ -284,7 +345,7 @@ exports.approveTransferRequest = async (req, res) => {
       message: `Transfer for ${lead.name || lead.firstName || 'lead'} was approved.`,
       entityType: 'transfer',
       entityId: transfer._id,
-      link: '/transfers',
+      link: '/tenant/transfers',
     });
 
     return sendSuccess(res, 200, 'Transfer request approved successfully', { transfer });
@@ -331,6 +392,22 @@ exports.rejectTransferRequest = async (req, res) => {
       });
       await lead.save();
     }
+    await syncLeadTransferRecord({
+      companyId: req.companyId,
+      leadId: transfer.leadId,
+      sourceTransferRequestId: transfer._id,
+      fromBranchId: transfer.fromBranchId,
+      toBranchId: transfer.toBranchId,
+      transferReason: transfer.reason,
+      transferStatus: 'rejected',
+      requestedBy: transfer.requestedBy,
+      approvedBy: req.user._id,
+      toAssigneeId: transfer.toAssigneeId,
+      requestedAt: transfer.requestedAt,
+      metadata: {
+        rejectionReason: transfer.rejectionReason,
+      },
+    });
 
     await createNotification({
       companyId: req.companyId,
@@ -341,7 +418,7 @@ exports.rejectTransferRequest = async (req, res) => {
       message: `Transfer request was rejected${transfer.rejectionReason ? `: ${transfer.rejectionReason}` : '.'}`,
       entityType: 'transfer',
       entityId: transfer._id,
-      link: '/transfers',
+      link: '/tenant/transfers',
     });
 
     return sendSuccess(res, 200, 'Transfer request rejected successfully', { transfer });
@@ -377,6 +454,22 @@ exports.cancelTransferRequest = async (req, res) => {
       notes: normalizeString(req.body.notes),
     });
     await transfer.save();
+    await syncLeadTransferRecord({
+      companyId: req.companyId,
+      leadId: transfer.leadId,
+      sourceTransferRequestId: transfer._id,
+      fromBranchId: transfer.fromBranchId,
+      toBranchId: transfer.toBranchId,
+      transferReason: transfer.reason,
+      transferStatus: 'cancelled',
+      requestedBy: transfer.requestedBy,
+      approvedBy: transfer.approvedBy || req.user._id,
+      toAssigneeId: transfer.toAssigneeId,
+      requestedAt: transfer.requestedAt,
+      metadata: {
+        notes: normalizeString(req.body.notes),
+      },
+    });
 
     return sendSuccess(res, 200, 'Transfer request cancelled successfully', { transfer });
   } catch (error) {

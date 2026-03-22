@@ -29,7 +29,7 @@ const getLeadUrl = (leadId) => {
     return '';
   }
 
-  return `${String(frontendUrl).replace(/\/$/, '')}/leads/${leadId}`;
+  return `${String(frontendUrl).replace(/\/$/, '')}/tenant/leads/${leadId}`;
 };
 
 const pushActivity = (lead, type, description, metadata = {}) => {

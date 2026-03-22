@@ -3,6 +3,12 @@ const Branch = require('../models/Branch');
 const Subscription = require('../models/Subscription');
 const User = require('../models/User');
 
+const BASE_SUBSCRIPTION_CACHE_TTL_MS = 60 * 1000;
+const SUBSCRIPTION_USAGE_CACHE_TTL_MS = 30 * 1000;
+
+const baseSubscriptionCache = new Map();
+const usageSnapshotCache = new Map();
+
 const PLAN_CONFIG = {
   starter: {
     userLimit: 10,
@@ -65,6 +71,20 @@ const PLAN_CONFIG = {
 
 const getPlanConfig = (plan = 'starter') => PLAN_CONFIG[plan] || PLAN_CONFIG.starter;
 
+const toCacheKey = (companyId) => String(companyId || '');
+
+const toPlainObject = (value) =>
+  value?.toObject ? value.toObject() : value ? { ...value } : null;
+
+const pruneCache = (cache) => {
+  const now = Date.now();
+  for (const [key, entry] of cache.entries()) {
+    if (!entry || entry.expiresAt <= now) {
+      cache.delete(key);
+    }
+  }
+};
+
 const ensureTenantSubscription = async (companyId) => {
   let subscription = await Subscription.findOne({ companyId });
   if (subscription) {
@@ -116,19 +136,74 @@ const ensureTenantSubscription = async (companyId) => {
   return subscription;
 };
 
-const getEffectiveSubscription = async (companyId) => {
-  const subscription = await ensureTenantSubscription(companyId);
+const getBaseSubscription = async (companyId, { forceRefresh = false } = {}) => {
+  const cacheKey = toCacheKey(companyId);
+  const cached = baseSubscriptionCache.get(cacheKey);
+
+  if (!forceRefresh && cached && cached.expiresAt > Date.now()) {
+    return cached.value;
+  }
+
+  const subscription = toPlainObject(await ensureTenantSubscription(companyId));
+  const nextValue = {
+    ...(subscription || {}),
+    companyId: subscription?.companyId || companyId,
+  };
+
+  if (baseSubscriptionCache.size > 200) {
+    pruneCache(baseSubscriptionCache);
+  }
+
+  baseSubscriptionCache.set(cacheKey, {
+    value: nextValue,
+    expiresAt: Date.now() + BASE_SUBSCRIPTION_CACHE_TTL_MS,
+  });
+
+  return nextValue;
+};
+
+const getSubscriptionUsageSnapshot = async (companyId, { forceRefresh = false } = {}) => {
+  const cacheKey = toCacheKey(companyId);
+  const cached = usageSnapshotCache.get(cacheKey);
+
+  if (!forceRefresh && cached && cached.expiresAt > Date.now()) {
+    return cached.value;
+  }
+
   const usage = {
     activeUsers: await User.countDocuments({ companyId, isActive: true, deletedAt: null }),
     branches: await Branch.countDocuments({ companyId, deletedAt: null, isActive: true }),
   };
 
-  subscription.usage = {
-    ...(subscription.usage?.toObject ? subscription.usage.toObject() : subscription.usage || {}),
-    ...usage,
+  if (usageSnapshotCache.size > 200) {
+    pruneCache(usageSnapshotCache);
+  }
+
+  usageSnapshotCache.set(cacheKey, {
+    value: usage,
+    expiresAt: Date.now() + SUBSCRIPTION_USAGE_CACHE_TTL_MS,
+  });
+
+  return usage;
+};
+
+const getEffectiveSubscription = async (
+  companyId,
+  { includeUsage = true, forceRefresh = false } = {}
+) => {
+  const subscription = await getBaseSubscription(companyId, { forceRefresh });
+  if (!includeUsage) {
+    return subscription;
+  }
+
+  const usage = await getSubscriptionUsageSnapshot(companyId, { forceRefresh });
+  return {
+    ...subscription,
+    usage: {
+      ...(subscription?.usage || {}),
+      ...usage,
+    },
   };
-  await subscription.save();
-  return subscription;
 };
 
 const isSubscriptionActive = (subscription) =>
@@ -138,12 +213,15 @@ const hasFeatureAccess = (subscription, featureKey) =>
   Boolean(subscription?.featureAccess?.[featureKey]);
 
 const isWithinLimit = async (companyId, limitKey) => {
-  const subscription = await getEffectiveSubscription(companyId);
+  const subscription = await getEffectiveSubscription(companyId, {
+    includeUsage: true,
+    forceRefresh: true,
+  });
   if (limitKey === 'users') {
-    return subscription.usage.activeUsers < subscription.userLimit;
+    return Number(subscription?.usage?.activeUsers || 0) < Number(subscription?.userLimit || 0);
   }
   if (limitKey === 'branches') {
-    return subscription.usage.branches < subscription.branchLimit;
+    return Number(subscription?.usage?.branches || 0) < Number(subscription?.branchLimit || 0);
   }
   return true;
 };

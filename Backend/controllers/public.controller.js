@@ -15,6 +15,7 @@ const {
 } = require('../services/counsellorMatching.service');
 const { runAutomationEvent } = require('../services/automation.service');
 const { createNotification } = require('../services/notification.service');
+const { syncLeadAssignments } = require('../services/leadCollaboration.service');
 
 const splitName = (value = '') => {
   const parts = String(value || '')
@@ -251,6 +252,8 @@ exports.submitPublicForm = async (req, res) => {
       mobile: payload.mobile,
       phone: payload.phone || payload.mobile,
       branchId: websiteIntegration?.defaultBranchId || form.branchId?._id || form.branchId || null,
+      activeBranchId:
+        websiteIntegration?.defaultBranchId || form.branchId?._id || form.branchId || null,
       branchName: form.branchId?.name || '',
       companyId: form.companyId,
       serviceType: payload.serviceType,
@@ -263,6 +266,8 @@ exports.submitPublicForm = async (req, res) => {
       preferredLocation: payload.preferredLocation || '',
       assignedCounsellor,
       assignedTo: assignedCounsellor,
+      primaryAssigneeId: assignedCounsellor,
+      assigneeIds: assignedCounsellor ? [assignedCounsellor] : [],
       ownerUserId: assignedCounsellor || undefined,
       status: workflow?.leadStages?.[0]?.key || 'new',
       pipelineStage: workflow?.leadStages?.[0]?.key || 'new',
@@ -282,6 +287,7 @@ exports.submitPublicForm = async (req, res) => {
         publicLeadFormId: form._id,
         sourceLabel: websiteIntegration?.sourceLabel || form.sourceLabel,
       },
+      formId: form._id,
     });
 
     if (payload.notes) {
@@ -309,6 +315,10 @@ exports.submitPublicForm = async (req, res) => {
     });
 
     await lead.save();
+    await syncLeadAssignments(lead, {
+      actorId: assignedCounsellor || null,
+      reason: 'Lead submitted via public capture',
+    });
 
     await PublicLeadForm.updateOne(
       { _id: form._id },

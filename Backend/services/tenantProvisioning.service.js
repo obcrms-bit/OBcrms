@@ -3,6 +3,7 @@ const Role = require('../models/Role');
 const SLAConfig = require('../models/SLAConfig');
 const { DEFAULT_ROLE_TEMPLATES, normalizeRoleKey } = require('../constants/rbac');
 const { ensureDefaultCountryWorkflows } = require('./countryWorkflow.service');
+const { ensureDefaultFunnelSetup } = require('./funnel.service');
 const { ensureTenantSubscription } = require('./subscription.service');
 
 const initializedTenants = new Set();
@@ -25,7 +26,7 @@ const ensureHeadOfficeBranch = async (companyId) => {
 
 const ensureRoles = async (companyId) => {
   await Promise.all(
-    DEFAULT_ROLE_TEMPLATES.map((template) =>
+    DEFAULT_ROLE_TEMPLATES.filter((template) => template.category !== 'platform').map((template) =>
       Role.findOneAndUpdate(
         { companyId, key: template.key },
         {
@@ -75,7 +76,11 @@ const ensureCompanySaaSSetup = async (companyId) => {
   }
 
   await Promise.all([ensureRoles(companyId), ensureHeadOfficeBranch(companyId), ensureSlaConfig(companyId)]);
-  await Promise.all([ensureDefaultCountryWorkflows(companyId), ensureTenantSubscription(companyId)]);
+  await Promise.all([
+    ensureDefaultCountryWorkflows(companyId),
+    ensureDefaultFunnelSetup(companyId),
+    ensureTenantSubscription(companyId),
+  ]);
   initializedTenants.add(key);
 };
 

@@ -5,6 +5,9 @@ const Activity = require('../models/Activity');
 const Branch = require('../models/Branch');
 const CountryWorkflow = require('../models/CountryWorkflow');
 const User = require('../models/User');
+const LeadAssignment = require('../models/LeadAssignment');
+const LeadBranchTransfer = require('../models/LeadBranchTransfer');
+const LeadActivityLog = require('../models/LeadActivityLog');
 const { sendSuccess, sendError } = require('../utils/responseHandler');
 const { calculateLeadScore } = require('../utils/leadScoring');
 const { runReminderSweep } = require('../services/followUpReminder.service');
@@ -18,12 +21,20 @@ const {
 } = require('../services/counsellorMatching.service');
 const {
   buildScopedClause,
+  getManagedUserIds,
   getUserBranchIds,
   hasPermission,
   mergeFiltersWithAnd,
   toObjectIdString,
 } = require('../services/accessControl.service');
 const { runAutomationEvent } = require('../services/automation.service');
+const {
+  createLeadActivityLog,
+  resolveAssigneeIds,
+  resolvePrimaryAssigneeId,
+  syncLeadAssignments,
+} = require('../services/leadCollaboration.service');
+const { buildBoardData, getStageByIdentifier, moveLeadToStage } = require('../services/funnel.service');
 
 const PIPELINE_STATUSES = [
   'new',
@@ -113,6 +124,15 @@ const splitName = (value) => {
   };
 };
 
+const normalizeObjectIdArray = (value) =>
+  Array.from(
+    new Set(
+      (Array.isArray(value) ? value : String(value || '').split(','))
+        .map((entry) => normalizeString(entry))
+        .filter(Boolean)
+    )
+  );
+
 const hasFullLeadAccess = (user) =>
   Boolean(
     user?.effectiveAccess?.isHeadOffice ||
@@ -121,9 +141,77 @@ const hasFullLeadAccess = (user) =>
   );
 
 const shouldAutoAssignToSelf = (user) =>
-  ['agent', 'follow_up_team', 'counselor'].includes(
+  ['agent', 'follow_up_team', 'counselor', 'counsellor'].includes(
     user?.effectiveAccess?.roleKey || user?.primaryRoleKey || user?.role
   );
+
+const buildLeadAssigneeList = (lead) => {
+  const items = [];
+  const seen = new Set();
+
+  [lead?.primaryAssigneeId, ...(Array.isArray(lead?.assigneeIds) ? lead.assigneeIds : []), lead?.assignedCounsellor]
+    .filter(Boolean)
+    .forEach((assignee) => {
+      const id = toObjectIdString(assignee);
+      if (!id || seen.has(id)) {
+        return;
+      }
+      seen.add(id);
+      items.push(assignee);
+    });
+
+  return items;
+};
+
+const serializeLeadCollaboration = (lead) => {
+  if (!lead) {
+    return lead;
+  }
+
+  const baseLead = lead?.toObject ? lead.toObject() : { ...lead };
+  const primaryAssignee =
+    baseLead.primaryAssigneeId || baseLead.assignedCounsellor || baseLead.assignedTo || null;
+  const assignees = buildLeadAssigneeList(baseLead);
+
+  return {
+    ...baseLead,
+    tenantId: baseLead.companyId,
+    activeBranchId: baseLead.activeBranchId || baseLead.branchId || null,
+    activeBranch: baseLead.activeBranchId || baseLead.branchId || null,
+    primaryAssigneeId: primaryAssignee?._id || primaryAssignee || null,
+    primaryAssignee,
+    assigneeIds: assignees,
+    assignees,
+    assigneeCount: assignees.length,
+    hasTransfers: Boolean(baseLead.transferHistory?.length),
+    transferCount: Array.isArray(baseLead.transferHistory) ? baseLead.transferHistory.length : 0,
+    activityLogs: baseLead.activityLogs || baseLead.activities || [],
+  };
+};
+
+const fetchLeadCollaboration = async (companyId, leadId) =>
+  Promise.all([
+    LeadAssignment.find({
+      companyId,
+      leadId,
+      active: true,
+    })
+      .populate('userId', 'name email role primaryRoleKey avatar branchId')
+      .populate('assignedBy', 'name email')
+      .sort({ isPrimary: -1, assignedAt: 1 })
+      .lean(),
+    LeadBranchTransfer.find({
+      companyId,
+      leadId,
+    })
+      .populate('fromBranchId', 'name code')
+      .populate('toBranchId', 'name code')
+      .populate('requestedBy', 'name email')
+      .populate('approvedBy', 'name email')
+      .populate('toAssigneeId', 'name email role primaryRoleKey')
+      .sort({ createdAt: -1 })
+      .lean(),
+  ]);
 
 const sanitizeQualification = (qualification) => ({
   country: normalizeString(qualification?.country) || '',
@@ -176,9 +264,18 @@ const sanitizeLeadPayload = (rawPayload = {}) => {
   const phone = normalizeString(rawPayload.phone);
   const mobile = normalizeString(rawPayload.mobile);
   const preferredStudyLevel = normalizeString(rawPayload.preferredStudyLevel || rawPayload.courseLevel);
+  const primaryAssigneeId =
+    normalizeString(
+      rawPayload.primaryAssigneeId ||
+        rawPayload.assignedCounsellor ||
+        rawPayload.assignedTo ||
+        rawPayload.assignee
+    ) || undefined;
+  const assigneeIds = normalizeObjectIdArray(
+    rawPayload.assigneeIds || rawPayload.assignees || primaryAssigneeId || []
+  );
   const assignedCounsellor =
-    normalizeString(rawPayload.assignedCounsellor || rawPayload.assignedTo || rawPayload.assignee) ||
-    undefined;
+    primaryAssigneeId || undefined;
 
   const payload = {
     ...nameParts,
@@ -205,7 +302,8 @@ const sanitizeLeadPayload = (rawPayload = {}) => {
         ? rawPayload.sourceMeta
         : undefined,
     campaign: normalizeString(rawPayload.campaign) || undefined,
-    branchId: normalizeString(rawPayload.branchId) || undefined,
+    branchId: normalizeString(rawPayload.branchId || rawPayload.activeBranchId) || undefined,
+    activeBranchId: normalizeString(rawPayload.activeBranchId || rawPayload.branchId) || undefined,
     branchName: normalizeString(rawPayload.branchName) || undefined,
     serviceType: normalizeLowerString(rawPayload.serviceType) || undefined,
     entityType: normalizeLowerString(rawPayload.entityType) || undefined,
@@ -227,6 +325,9 @@ const sanitizeLeadPayload = (rawPayload = {}) => {
     recordType: normalizeLowerString(rawPayload.recordType),
     assignedCounsellor,
     assignedTo: assignedCounsellor,
+    primaryAssigneeId: primaryAssigneeId || undefined,
+    assigneeIds: assigneeIds.length ? assigneeIds : undefined,
+    formId: normalizeString(rawPayload.formId) || undefined,
     address: rawPayload.address && typeof rawPayload.address === 'object' ? rawPayload.address : undefined,
     education: rawPayload.education
       ? {
@@ -338,7 +439,7 @@ const getScopedLeadFilter = async (req, extra = {}) =>
     { companyId: req.companyId, deletedAt: null },
     await buildScopedClause(req.user, 'leads', {
       branchField: 'branchId',
-      assigneeFields: ['assignedCounsellor', 'assignedTo'],
+      assigneeFields: ['assignedCounsellor', 'assignedTo', 'primaryAssigneeId', 'assigneeIds'],
       creatorFields: ['createdByUser'],
       ownerFields: ['ownerUserId'],
     }),
@@ -360,8 +461,13 @@ const canWriteLead = (user, lead) => {
 
   const userBranchIds = getUserBranchIds(user);
   const leadBranchId = toObjectIdString(lead.branchId);
+  const leadAssigneeIds = resolveAssigneeIds(lead);
 
-  if (String(lead.assignedCounsellor || lead.assignedTo || '') === String(user?._id || '')) {
+  if (
+    leadAssigneeIds.includes(String(user?._id || '')) ||
+    String(lead.primaryAssigneeId || lead.assignedCounsellor || lead.assignedTo || '') ===
+      String(user?._id || '')
+  ) {
     return true;
   }
   if (String(lead.createdByUser || lead.ownerUserId || '') === String(user?._id || '')) {
@@ -377,8 +483,13 @@ const canWriteLead = (user, lead) => {
 const populateLead = (query) =>
   query
     .populate('assignedCounsellor', 'name email phone role')
+    .populate('primaryAssigneeId', 'name email phone role primaryRoleKey avatar branchId')
+    .populate('assigneeIds', 'name email phone role primaryRoleKey avatar branchId')
     .populate('studentId', 'fullName email phone status')
     .populate('branchId', 'name location')
+    .populate('activeBranchId', 'name location code')
+    .populate('currentFunnelStageId', 'name key color order isTerminal isWon isLost slaHours')
+    .populate('lostReasonId', 'label')
     .populate('activities.performedBy', 'name email')
     .populate('assignmentHistory.counsellor', 'name email')
     .populate('assignmentHistory.assignedBy', 'name email')
@@ -386,6 +497,15 @@ const populateLead = (query) =>
     .populate('followUps.scheduledBy', 'name email')
     .populate('followUps.completedBy', 'name email')
     .populate('followUps.convertedStudentId', 'fullName email phone');
+
+const DASHBOARD_LEAD_SELECT =
+  'firstName lastName name branchName dob createdAt status pipelineStage';
+
+const DASHBOARD_FOLLOW_UP_SELECT =
+  'firstName lastName name email phone mobile source branchName stream status pipelineStage assignedCounsellor followUps nextFollowUp lastContactedAt convertedToStudent';
+
+const populateDashboardFollowUps = (query) =>
+  query.populate('assignedCounsellor', 'name').lean();
 
 const logActivity = async (companyId, entityId, action, description, performedBy, meta = {}) => {
   try {
@@ -398,6 +518,15 @@ const logActivity = async (companyId, entityId, action, description, performedBy
       description,
       performedBy,
       performedByName: meta.performedByName,
+      metadata: meta,
+    });
+
+    await createLeadActivityLog({
+      companyId,
+      leadId: entityId,
+      type: action,
+      message: description,
+      createdBy: performedBy,
       metadata: meta,
     });
   } catch (error) {
@@ -490,12 +619,31 @@ const ensureCounsellorInCompany = async (companyId, counsellorId) => {
         'sales',
         'admin',
         'super_admin',
+        'super_admin_manager',
         'follow_up_team',
         'branch_manager',
         'head_office_admin',
+        'tenant_admin',
+        'branch_admin',
+        'counsellor',
+        'finance',
+        'operations',
       ],
     },
   }).select('name email role');
+};
+
+const ensureUsersInCompany = async (companyId, userIds = []) => {
+  const normalizedUserIds = normalizeObjectIdArray(userIds);
+  if (!normalizedUserIds.length) {
+    return [];
+  }
+
+  return User.find({
+    _id: { $in: normalizedUserIds },
+    companyId,
+    isActive: true,
+  }).select('name email role primaryRoleKey avatar branchId');
 };
 
 const findDuplicateLead = async (companyId, payload, excludeLeadId = null) => {
@@ -530,6 +678,7 @@ exports.getLeads = asyncHandler(async (req, res) => {
     source,
     counsellor,
     branch,
+    branchId,
     sortBy = 'createdAt',
     sortOrder = 'desc',
     category,
@@ -537,45 +686,128 @@ exports.getLeads = asyncHandler(async (req, res) => {
     toDate,
     course,
     recordType,
+    viewScope,
+    transferredOnly,
   } = req.query;
+  const isCompactView = String(req.query.compact || '').toLowerCase() === 'dashboard';
 
-  const filter = await getScopedLeadFilter(req);
-  if (status) filter.status = status;
-  if (source) filter.source = source;
-  if (counsellor && hasFullLeadAccess(req.user)) filter.assignedCounsellor = counsellor;
-  if (category) filter.leadCategory = category;
-  if (recordType) filter.recordType = recordType;
-  if (course) filter.interestedCourse = { $regex: course, $options: 'i' };
-  if (branch) {
-    filter.$or = [
-      mongoose.Types.ObjectId.isValid(branch) ? { branchId: branch } : null,
-      { branchName: { $regex: branch, $options: 'i' } },
-    ].filter(Boolean);
+  const filterParts = [await getScopedLeadFilter(req)];
+
+  if (status) {
+    filterParts.push({ status });
+  }
+  if (source) {
+    filterParts.push({ source });
+  }
+  if (counsellor && hasFullLeadAccess(req.user)) {
+    filterParts.push({
+      $or: [
+        { assignedCounsellor: counsellor },
+        { primaryAssigneeId: counsellor },
+        { assigneeIds: counsellor },
+      ],
+    });
+  }
+  if (category) {
+    filterParts.push({ leadCategory: category });
+  }
+  if (recordType) {
+    filterParts.push({ recordType });
+  }
+  if (course) {
+    filterParts.push({ interestedCourse: { $regex: course, $options: 'i' } });
+  }
+  if (branch || branchId) {
+    const branchFilterValue = branchId || branch;
+    filterParts.push({
+      $or: [
+        mongoose.Types.ObjectId.isValid(branchFilterValue)
+          ? { $or: [{ branchId: branchFilterValue }, { activeBranchId: branchFilterValue }] }
+          : null,
+        { branchName: { $regex: branchFilterValue, $options: 'i' } },
+      ].filter(Boolean),
+    });
   }
   if (fromDate || toDate) {
-    filter.createdAt = {};
-    if (fromDate) filter.createdAt.$gte = new Date(fromDate);
-    if (toDate) filter.createdAt.$lte = new Date(toDate);
+    const createdAt = {};
+    if (fromDate) {
+      createdAt.$gte = new Date(fromDate);
+    }
+    if (toDate) {
+      createdAt.$lte = new Date(toDate);
+    }
+    filterParts.push({ createdAt });
   }
   if (search) {
-    filter.$or = [
-      { firstName: { $regex: search, $options: 'i' } },
-      { lastName: { $regex: search, $options: 'i' } },
-      { name: { $regex: search, $options: 'i' } },
-      { email: { $regex: search, $options: 'i' } },
-      { phone: { $regex: search, $options: 'i' } },
-      { mobile: { $regex: search, $options: 'i' } },
-      { interestedCourse: { $regex: search, $options: 'i' } },
-      { branchName: { $regex: search, $options: 'i' } },
-    ];
+    filterParts.push({
+      $or: [
+        { firstName: { $regex: search, $options: 'i' } },
+        { lastName: { $regex: search, $options: 'i' } },
+        { name: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+        { phone: { $regex: search, $options: 'i' } },
+        { mobile: { $regex: search, $options: 'i' } },
+        { interestedCourse: { $regex: search, $options: 'i' } },
+        { branchName: { $regex: search, $options: 'i' } },
+      ],
+    });
   }
+
+  const normalizedViewScope = String(viewScope || '').trim().toLowerCase();
+  if (normalizedViewScope === 'my') {
+    filterParts.push({
+      $or: [
+        { primaryAssigneeId: req.user._id },
+        { assignedCounsellor: req.user._id },
+        { assigneeIds: req.user._id },
+        { createdByUser: req.user._id },
+      ],
+    });
+  }
+  if (normalizedViewScope === 'team') {
+    const managedUserIds = await getManagedUserIds(req.user);
+    if (managedUserIds.length) {
+      filterParts.push({
+        $or: [
+          { primaryAssigneeId: { $in: managedUserIds } },
+          { assignedCounsellor: { $in: managedUserIds } },
+          { assigneeIds: { $in: managedUserIds } },
+          { createdByUser: { $in: managedUserIds } },
+        ],
+      });
+    }
+  }
+  if (normalizedViewScope === 'branch') {
+    const branchIds = getUserBranchIds(req.user);
+    if (branchIds.length) {
+      filterParts.push({
+        $or: [{ branchId: { $in: branchIds } }, { activeBranchId: { $in: branchIds } }],
+      });
+    }
+  }
+  if (normalizedViewScope === 'transferred' || normalizeBoolean(transferredOnly)) {
+    filterParts.push({ 'transferHistory.0': { $exists: true } });
+  }
+
+  const filter = mergeFiltersWithAnd(...filterParts);
 
   const skip = (Number(page) - 1) * Number(limit);
   const sort = { [sortBy]: sortOrder === 'asc' ? 1 : -1 };
-  const [leads, total] = await Promise.all([
-    populateLead(Lead.find(filter).sort(sort).skip(skip).limit(Number(limit))).lean(),
+  const leadListQuery = Lead.find(filter).sort(sort).skip(skip).limit(Number(limit));
+
+  if (isCompactView) {
+    leadListQuery.select(DASHBOARD_LEAD_SELECT).lean();
+  }
+
+  const [rawLeads, total] = await Promise.all([
+    isCompactView ? leadListQuery : populateLead(leadListQuery).lean(),
     Lead.countDocuments(filter),
   ]);
+  const leads = rawLeads.map((lead) => serializeLeadCollaboration(lead));
+
+  if (isCompactView) {
+    res.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=60');
+  }
 
   sendSuccess(res, 200, 'Leads fetched', {
     leads,
@@ -617,6 +849,7 @@ exports.createLead = asyncHandler(async (req, res) => {
   if (!payload.assignedCounsellor && shouldAutoAssignToSelf(req.user)) {
     payload.assignedCounsellor = req.user._id;
     payload.assignedTo = req.user._id;
+    payload.primaryAssigneeId = req.user._id;
   }
 
   let autoMatch = null;
@@ -630,6 +863,7 @@ exports.createLead = asyncHandler(async (req, res) => {
     if (autoMatch?.counsellor?._id) {
       payload.assignedCounsellor = autoMatch.counsellor._id;
       payload.assignedTo = autoMatch.counsellor._id;
+      payload.primaryAssigneeId = autoMatch.counsellor._id;
     }
   }
 
@@ -656,8 +890,9 @@ exports.createLead = asyncHandler(async (req, res) => {
   const lead = new Lead({
     ...payload,
     companyId: req.companyId,
+    activeBranchId: payload.activeBranchId || payload.branchId || null,
     createdByUser: req.user?._id,
-    ownerUserId: payload.assignedCounsellor || req.user?._id,
+    ownerUserId: payload.primaryAssigneeId || payload.assignedCounsellor || req.user?._id,
     serviceType: payload.serviceType || 'consultancy',
     entityType: payload.serviceType === 'test_prep' ? 'student' : 'client',
     status: payload.status || payload.pipelineStage || workflowStages[0]?.key || 'new',
@@ -675,6 +910,9 @@ exports.createLead = asyncHandler(async (req, res) => {
     },
     sourceType: payload.sourceType || 'manual_entry',
     sourceMeta: payload.sourceMeta || {},
+    formId: payload.formId || null,
+    primaryAssigneeId: payload.primaryAssigneeId || payload.assignedCounsellor || null,
+    assigneeIds: payload.assigneeIds || resolveAssigneeIds(payload),
     assignmentHistory: payload.assignedCounsellor
       ? [
         {
@@ -733,7 +971,16 @@ exports.createLead = asyncHandler(async (req, res) => {
     }
   );
 
+  const initialFunnelStage = await getStageByIdentifier(req.companyId, lead.pipelineStage || lead.status);
+  if (initialFunnelStage?._id) {
+    lead.currentFunnelStageId = initialFunnelStage._id;
+  }
+
   await lead.save();
+  const assignments = await syncLeadAssignments(lead, {
+    actorId: req.user?._id,
+    reason: 'Lead created',
+  });
   await logActivity(
     req.companyId,
     lead._id,
@@ -758,7 +1005,8 @@ exports.createLead = asyncHandler(async (req, res) => {
 
   const createdLead = await populateLead(Lead.findById(lead._id));
   sendSuccess(res, 201, 'Lead created successfully', {
-    lead: createdLead,
+    lead: serializeLeadCollaboration(createdLead),
+    assignments,
     workflow,
     workflowStages,
   });
@@ -778,8 +1026,23 @@ exports.getLeadById = asyncHandler(async (req, res) => {
     req.companyId,
     lead.preferredCountries || []
   );
+  let [assignments, transfers] = await fetchLeadCollaboration(req.companyId, lead._id);
 
-  sendSuccess(res, 200, 'Lead fetched', { lead, workflow, workflowStages });
+  if (!assignments.length && resolveAssigneeIds(lead).length) {
+    await syncLeadAssignments(lead, {
+      actorId: req.user?._id,
+      reason: 'Backfilled from lead record',
+    });
+    [assignments, transfers] = await fetchLeadCollaboration(req.companyId, lead._id);
+  }
+
+  sendSuccess(res, 200, 'Lead fetched', {
+    lead: serializeLeadCollaboration(lead),
+    assignments,
+    transfers,
+    workflow,
+    workflowStages,
+  });
 });
 
 exports.updateLead = asyncHandler(async (req, res) => {
@@ -828,6 +1091,7 @@ exports.updateLead = asyncHandler(async (req, res) => {
     if (autoMatch?.counsellor?._id) {
       payload.assignedCounsellor = autoMatch.counsellor._id;
       payload.assignedTo = autoMatch.counsellor._id;
+      payload.primaryAssigneeId = autoMatch.counsellor._id;
     }
   }
 
@@ -845,6 +1109,7 @@ exports.updateLead = asyncHandler(async (req, res) => {
 
   const previousStatus = lead.status;
   const previousCounsellor = String(lead.assignedCounsellor || '');
+  const previousPrimaryAssignee = String(lead.primaryAssigneeId || lead.assignedCounsellor || '');
 
   Object.entries(payload).forEach(([key, value]) => {
     if (typeof value !== 'undefined') {
@@ -852,10 +1117,25 @@ exports.updateLead = asyncHandler(async (req, res) => {
     }
   });
 
+  if (payload.primaryAssigneeId || payload.assignedCounsellor) {
+    lead.primaryAssigneeId = payload.primaryAssigneeId || payload.assignedCounsellor;
+    lead.assignedCounsellor = lead.primaryAssigneeId;
+    lead.assignedTo = lead.primaryAssigneeId;
+    lead.ownerUserId = lead.primaryAssigneeId;
+  }
+  if (payload.assigneeIds || lead.assigneeIds?.length || lead.primaryAssigneeId) {
+    lead.assigneeIds = resolveAssigneeIds(lead);
+  }
+  if (payload.activeBranchId || payload.branchId) {
+    lead.activeBranchId = payload.activeBranchId || payload.branchId;
+  }
+
   if (payload.status || payload.pipelineStage) {
     lead.status = payload.status || payload.pipelineStage;
     lead.pipelineStage = payload.pipelineStage || payload.status;
     lead.stage = getStageNumber(lead.status, workflowStages);
+    const resolvedFunnelStage = await getStageByIdentifier(req.companyId, lead.pipelineStage);
+    lead.currentFunnelStageId = resolvedFunnelStage?._id || lead.currentFunnelStageId || null;
   }
 
   lead.metadata = {
@@ -863,16 +1143,19 @@ exports.updateLead = asyncHandler(async (req, res) => {
     workflowCountry: workflow?.country || lead.metadata?.workflowCountry || null,
   };
 
-  if (payload.assignedCounsellor && String(payload.assignedCounsellor) !== previousCounsellor) {
+  if (
+    (payload.assignedCounsellor || payload.primaryAssigneeId) &&
+    String(payload.assignedCounsellor || payload.primaryAssigneeId) !== previousPrimaryAssignee
+  ) {
     lead.assignmentHistory.push({
-      counsellor: payload.assignedCounsellor,
+      counsellor: payload.assignedCounsellor || payload.primaryAssigneeId,
       assignedAt: new Date(),
       assignedBy: req.user?._id,
       reason: normalizeString(req.body.assignmentReason) || 'Lead reassigned',
     });
     addLeadActivity(lead, 'assignment_changed', 'Counsellor assignment changed', req.user?._id, {
       from: previousCounsellor,
-      to: payload.assignedCounsellor,
+      to: payload.assignedCounsellor || payload.primaryAssigneeId,
     });
   }
 
@@ -898,13 +1181,22 @@ exports.updateLead = asyncHandler(async (req, res) => {
   }
 
   await lead.save();
+  const assignments = await syncLeadAssignments(lead, {
+    actorId: req.user?._id,
+    reason: normalizeString(req.body.assignmentReason) || 'Lead updated',
+  });
   await logActivity(req.companyId, lead._id, 'lead_updated', 'Lead updated', req.user?._id, {
     performedByName: req.user?.name,
     status: lead.status,
   });
 
   const updatedLead = await populateLead(Lead.findById(lead._id));
-  sendSuccess(res, 200, 'Lead updated', { lead: updatedLead, workflow, workflowStages });
+  sendSuccess(res, 200, 'Lead updated', {
+    lead: serializeLeadCollaboration(updatedLead),
+    assignments,
+    workflow,
+    workflowStages,
+  });
 });
 
 const buildStudentPayloadFromLead = (lead, user) => {
@@ -1081,6 +1373,12 @@ exports.assignCounsellor = asyncHandler(async (req, res) => {
   const previousCounsellor = lead.assignedCounsellor;
   lead.assignedCounsellor = counsellor._id;
   lead.assignedTo = counsellor._id;
+  lead.primaryAssigneeId = counsellor._id;
+  lead.assigneeIds = resolveAssigneeIds({
+    ...lead.toObject(),
+    assigneeIds: [...(Array.isArray(lead.assigneeIds) ? lead.assigneeIds : []), counsellor._id],
+    primaryAssigneeId: counsellor._id,
+  });
   lead.ownerUserId = counsellor._id;
   lead.assignmentHistory.push({
     counsellor: counsellor._id,
@@ -1096,6 +1394,10 @@ exports.assignCounsellor = asyncHandler(async (req, res) => {
   });
 
   await lead.save();
+  const assignments = await syncLeadAssignments(lead, {
+    actorId: req.user?._id,
+    reason: normalizeString(reason) || 'Manual assignment',
+  });
   await logActivity(
     req.companyId,
     lead._id,
@@ -1106,7 +1408,211 @@ exports.assignCounsellor = asyncHandler(async (req, res) => {
   );
 
   const updatedLead = await populateLead(Lead.findById(lead._id));
-  sendSuccess(res, 200, 'Counsellor assigned', { lead: updatedLead });
+  sendSuccess(res, 200, 'Counsellor assigned', {
+    lead: serializeLeadCollaboration(updatedLead),
+    assignments,
+  });
+});
+
+exports.getAssignments = asyncHandler(async (req, res) => {
+  const lead = await Lead.findOne(await getScopedLeadFilter(req, { _id: req.params.id })).select(
+    '_id companyId branchId activeBranchId assignedCounsellor assignedTo primaryAssigneeId assigneeIds'
+  );
+  if (!lead) {
+    return sendError(res, 404, 'Lead not found');
+  }
+
+  let assignments = await LeadAssignment.find({
+    companyId: req.companyId,
+    leadId: lead._id,
+    active: true,
+  })
+    .populate('userId', 'name email role primaryRoleKey avatar branchId')
+    .populate('assignedBy', 'name email')
+    .sort({ isPrimary: -1, assignedAt: 1 })
+    .lean();
+
+  if (!assignments.length && resolveAssigneeIds(lead).length) {
+    await syncLeadAssignments(lead, { actorId: req.user?._id, reason: 'Backfilled from lead record' });
+    assignments = await LeadAssignment.find({
+      companyId: req.companyId,
+      leadId: lead._id,
+      active: true,
+    })
+      .populate('userId', 'name email role primaryRoleKey avatar branchId')
+      .populate('assignedBy', 'name email')
+      .sort({ isPrimary: -1, assignedAt: 1 })
+      .lean();
+  }
+
+  sendSuccess(res, 200, 'Lead assignments fetched', { assignments });
+});
+
+exports.saveAssignments = asyncHandler(async (req, res) => {
+  const lead = await Lead.findOne({
+    _id: req.params.id,
+    companyId: req.companyId,
+    deletedAt: null,
+  });
+  if (!lead) {
+    return sendError(res, 404, 'Lead not found');
+  }
+  if (!canWriteLead(req.user, lead) && !hasPermission(req.user, 'leads', 'assign')) {
+    return sendError(res, 403, 'You do not have permission to manage lead assignees.');
+  }
+
+  const requestedUserIds = normalizeObjectIdArray(
+    req.body.userIds || req.body.assigneeIds || req.body.assignees || req.body.userId || []
+  );
+  const requestedPrimaryAssigneeId =
+    normalizeString(req.body.primaryAssigneeId || req.body.counsellorId) || '';
+  const nextUserIds = Array.from(
+    new Set(
+      [...requestedUserIds, requestedPrimaryAssigneeId || '']
+        .map((value) => String(value || '').trim())
+        .filter(Boolean)
+    )
+  );
+
+  const users = await ensureUsersInCompany(req.companyId, nextUserIds);
+  if (users.length !== nextUserIds.length) {
+    return sendError(res, 400, 'One or more assignees do not belong to your company.');
+  }
+
+  const nextPrimaryAssigneeId =
+    requestedPrimaryAssigneeId || nextUserIds[0] || '';
+  const previousPrimaryAssigneeId = String(
+    lead.primaryAssigneeId || lead.assignedCounsellor || lead.assignedTo || ''
+  );
+
+  lead.assigneeIds = nextUserIds;
+  lead.primaryAssigneeId = nextPrimaryAssigneeId || null;
+  lead.assignedCounsellor = nextPrimaryAssigneeId || null;
+  lead.assignedTo = nextPrimaryAssigneeId || null;
+  lead.ownerUserId = nextPrimaryAssigneeId || lead.createdByUser || lead.ownerUserId || null;
+
+  if (nextPrimaryAssigneeId && nextPrimaryAssigneeId !== previousPrimaryAssigneeId) {
+    lead.assignmentHistory.push({
+      counsellor: nextPrimaryAssigneeId,
+      assignedAt: new Date(),
+      assignedBy: req.user?._id,
+      reason: normalizeString(req.body.reason) || 'Multi-assignee update',
+    });
+  }
+
+  addLeadActivity(
+    lead,
+    'assignment_changed',
+    'Lead assignees updated',
+    req.user?._id,
+    {
+      previousPrimaryAssigneeId,
+      nextPrimaryAssigneeId: nextPrimaryAssigneeId || null,
+      assigneeIds: nextUserIds,
+    }
+  );
+
+  await lead.save();
+  const assignments = await syncLeadAssignments(lead, {
+    actorId: req.user?._id,
+    reason: normalizeString(req.body.reason) || 'Lead assignees updated',
+  });
+  await logActivity(
+    req.companyId,
+    lead._id,
+    'assignment_changed',
+    'Lead assignees updated',
+    req.user?._id,
+    {
+      performedByName: req.user?.name,
+      assigneeIds: nextUserIds,
+      primaryAssigneeId: nextPrimaryAssigneeId || null,
+    }
+  );
+
+  const updatedLead = await populateLead(Lead.findById(lead._id));
+  sendSuccess(res, 200, 'Lead assignees updated', {
+    lead: serializeLeadCollaboration(updatedLead),
+    assignments,
+  });
+});
+
+exports.removeAssignment = asyncHandler(async (req, res) => {
+  const lead = await Lead.findOne({
+    _id: req.params.id,
+    companyId: req.companyId,
+    deletedAt: null,
+  });
+  if (!lead) {
+    return sendError(res, 404, 'Lead not found');
+  }
+  if (!canWriteLead(req.user, lead) && !hasPermission(req.user, 'leads', 'assign')) {
+    return sendError(res, 403, 'You do not have permission to manage lead assignees.');
+  }
+
+  const removedUserId = String(req.params.assignmentId || '').trim();
+  const nextUserIds = resolveAssigneeIds(lead).filter((userId) => userId !== removedUserId);
+  const previousPrimaryAssigneeId = String(
+    lead.primaryAssigneeId || lead.assignedCounsellor || lead.assignedTo || ''
+  );
+  const nextPrimaryAssigneeId =
+    previousPrimaryAssigneeId === removedUserId ? nextUserIds[0] || '' : previousPrimaryAssigneeId;
+
+  lead.assigneeIds = nextUserIds;
+  lead.primaryAssigneeId = nextPrimaryAssigneeId || null;
+  lead.assignedCounsellor = nextPrimaryAssigneeId || null;
+  lead.assignedTo = nextPrimaryAssigneeId || null;
+  lead.ownerUserId = nextPrimaryAssigneeId || lead.createdByUser || lead.ownerUserId || null;
+
+  addLeadActivity(lead, 'assignment_changed', 'Lead assignee removed', req.user?._id, {
+    removedUserId,
+    nextPrimaryAssigneeId: nextPrimaryAssigneeId || null,
+  });
+
+  await lead.save();
+  const assignments = await syncLeadAssignments(lead, {
+    actorId: req.user?._id,
+    reason: 'Lead assignee removed',
+  });
+  await logActivity(
+    req.companyId,
+    lead._id,
+    'assignment_changed',
+    'Lead assignee removed',
+    req.user?._id,
+    {
+      performedByName: req.user?.name,
+      removedUserId,
+      primaryAssigneeId: nextPrimaryAssigneeId || null,
+    }
+  );
+
+  const updatedLead = await populateLead(Lead.findById(lead._id));
+  sendSuccess(res, 200, 'Lead assignee removed', {
+    lead: serializeLeadCollaboration(updatedLead),
+    assignments,
+  });
+});
+
+exports.getTransferHistory = asyncHandler(async (req, res) => {
+  const lead = await Lead.findOne(await getScopedLeadFilter(req, { _id: req.params.id })).select('_id');
+  if (!lead) {
+    return sendError(res, 404, 'Lead not found');
+  }
+
+  const transfers = await LeadBranchTransfer.find({
+    companyId: req.companyId,
+    leadId: lead._id,
+  })
+    .populate('fromBranchId', 'name code')
+    .populate('toBranchId', 'name code')
+    .populate('requestedBy', 'name email')
+    .populate('approvedBy', 'name email')
+    .populate('toAssigneeId', 'name email role primaryRoleKey')
+    .sort({ createdAt: -1 })
+    .lean();
+
+  sendSuccess(res, 200, 'Lead transfers fetched', { transfers });
 });
 
 exports.updateStatus = asyncHandler(async (req, res) => {
@@ -1124,31 +1630,28 @@ exports.updateStatus = asyncHandler(async (req, res) => {
     return sendError(res, 403, 'You do not have permission to update this lead.');
   }
 
-  const { workflow, workflowStages } = await resolveLeadWorkflow(
-    req.companyId,
-    lead.preferredCountries || []
-  );
-  const allowedStageKeys = workflowStages.map((stage) => stage.key);
-  if (!allowedStageKeys.includes(status)) {
-    return sendError(res, 400, 'Invalid lead status supplied for the selected workflow.');
+  try {
+    const targetStage = await moveLeadToStage({
+      companyId: req.companyId,
+      lead,
+      stageIdentifier: status,
+      actor: req.user,
+      payload: req.body,
+    });
+    const { workflow, workflowStages } = await resolveLeadWorkflow(
+      req.companyId,
+      lead.preferredCountries || []
+    );
+    const updatedLead = await populateLead(Lead.findById(lead._id));
+    sendSuccess(res, 200, 'Funnel stage updated', {
+      lead: serializeLeadCollaboration(updatedLead),
+      targetStage,
+      workflow,
+      workflowStages,
+    });
+  } catch (error) {
+    return sendError(res, 400, error.message, error.validationErrors || undefined);
   }
-
-  const previousStatus = lead.status;
-  lead.status = status;
-  lead.pipelineStage = status;
-  lead.stage = getStageNumber(status, workflowStages);
-
-  addLeadActivity(
-    lead,
-    'status_changed',
-    `Status updated from ${previousStatus} to ${status}`,
-    req.user?._id,
-    { from: previousStatus, to: status, workflowCountry: workflow?.country || null }
-  );
-
-  await lead.save();
-  const updatedLead = await populateLead(Lead.findById(lead._id));
-  sendSuccess(res, 200, 'Status updated', { lead: updatedLead, workflow, workflowStages });
 });
 
 exports.scheduleFollowUp = asyncHandler(async (req, res) => {
@@ -1233,6 +1736,8 @@ exports.completeFollowUp = asyncHandler(async (req, res) => {
     return sendError(res, 403, 'You do not have permission to complete this follow-up.');
   }
 
+  const { workflowStages } = await resolveLeadWorkflow(req.companyId, lead.preferredCountries || []);
+
   const followUp = lead.followUps.id(req.params.followUpId);
   if (!followUp) {
     return sendError(res, 404, 'Follow-up not found');
@@ -1291,10 +1796,19 @@ exports.completeFollowUp = asyncHandler(async (req, res) => {
     lead.status = 'lost';
     lead.pipelineStage = 'lost';
     lead.stage = getStageNumber('lost');
-  } else if (outcomeType !== 'converted_to_student' && lead.status === 'new') {
-    lead.status = 'contacted';
-    lead.pipelineStage = 'contacted';
-    lead.stage = getStageNumber('contacted');
+  } else if (outcomeType !== 'converted_to_student') {
+    const currentStageKey = lead.pipelineStage || lead.status || workflowStages[0]?.key || 'new';
+    const currentStageIndex = workflowStages.findIndex((stage) => stage.key === currentStageKey);
+    const nextWorkflowStage =
+      currentStageIndex === 0 ? workflowStages[currentStageIndex + 1]?.key : undefined;
+    const fallbackNextStage = currentStageKey === 'new' ? 'contacted' : undefined;
+    const nextStageKey = nextWorkflowStage || fallbackNextStage;
+
+    if (nextStageKey) {
+      lead.status = nextStageKey;
+      lead.pipelineStage = nextStageKey;
+      lead.stage = getStageNumber(nextStageKey, workflowStages);
+    }
   }
 
   addLeadActivity(
@@ -1434,7 +1948,7 @@ const serializeFollowUp = (lead, followUp) => ({
   pipelineStage: lead.pipelineStage || lead.status,
   assignedCounsellor: lead.assignedCounsellor,
   followUp: {
-    ...followUp.toObject(),
+    ...(followUp?.toObject ? followUp.toObject() : { ...followUp }),
     urgency: getFollowUpUrgency(followUp),
   },
   scheduledAt: followUp.scheduledAt,
@@ -1497,7 +2011,46 @@ exports.getActivities = asyncHandler(async (req, res) => {
     return sendError(res, 404, 'Lead not found');
   }
 
-  sendSuccess(res, 200, 'Activities fetched', { activities: lead.activities || [] });
+  const activityLogs = await LeadActivityLog.find({
+    companyId: req.companyId,
+    leadId: req.params.id,
+  })
+    .populate('createdBy', 'name email')
+    .sort({ createdAt: -1 })
+    .lean();
+
+  const mergedActivities = [
+    ...(lead.activities || []).map((activity) => ({
+      ...(activity?.toObject ? activity.toObject() : activity),
+      source: 'lead',
+      message: activity.description,
+      createdBy: activity.performedBy || null,
+    })),
+    ...activityLogs.map((activity) => ({
+      ...activity,
+      source: 'activity_log',
+      description: activity.message,
+      performedBy: activity.createdBy || null,
+    })),
+  ]
+    .filter((activity, index, items) => {
+      const key = [
+        activity.type,
+        activity.message || activity.description,
+        new Date(activity.createdAt || 0).toISOString(),
+      ].join(':');
+      return items.findIndex((candidate) => {
+        const candidateKey = [
+          candidate.type,
+          candidate.message || candidate.description,
+          new Date(candidate.createdAt || 0).toISOString(),
+        ].join(':');
+        return candidateKey === key;
+      }) === index;
+    })
+    .sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
+
+  sendSuccess(res, 200, 'Activities fetched', { activities: mergedActivities });
 });
 
 exports.getLeadFollowUps = asyncHandler(async (req, res) => {
@@ -1522,37 +2075,23 @@ exports.getLeadFollowUps = asyncHandler(async (req, res) => {
 });
 
 exports.getPipeline = asyncHandler(async (req, res) => {
-  const workflowStages = await getTenantLeadStages(req.companyId);
-  const scopedFilter = applyBranchQueryFilter(req, await getScopedLeadFilter(req));
-  const leads = await populateLead(
-    Lead.find(scopedFilter).select(
-      'firstName lastName name email phone mobile status pipelineStage leadScore leadCategory source preferredCountries interestedCourse assignedCounsellor nextFollowUp updatedAt createdAt'
-    )
-  ).lean();
-
-  const stages = [
-    ...workflowStages,
-    ...leads
-      .map((lead) => ({
-        key: lead.pipelineStage || lead.status,
-        label: formatStageLabel(lead.pipelineStage || lead.status),
-        order: workflowStages.length + 1,
-      }))
-      .filter((stage) => stage.key && !workflowStages.some((item) => item.key === stage.key)),
-  ];
-
-  const result = {};
-  stages.forEach((stage) => {
-    const stageLeads = leads.filter((lead) => (lead.pipelineStage || lead.status) === stage.key);
-    result[stage.key] = {
-      stage: stage.key,
-      label: stage.label,
-      count: stageLeads.length,
-      leads: stageLeads.slice(0, 100),
-    };
+  const data = await buildBoardData({
+    companyId: req.companyId,
+    user: req.user,
+    query: req.query,
   });
 
-  sendSuccess(res, 200, 'Pipeline fetched', { pipeline: result, stages });
+  sendSuccess(res, 200, 'Funnel board fetched', {
+    pipeline: data.board,
+    board: data.board,
+    stages: data.stages.map((stage) => ({
+      key: stage.key,
+      label: stage.name,
+      order: stage.order,
+      color: stage.color,
+    })),
+    totals: data.totals,
+  });
 });
 
 exports.getDueFollowUps = asyncHandler(async (req, res) => {
@@ -1561,7 +2100,7 @@ exports.getDueFollowUps = asyncHandler(async (req, res) => {
   horizonDate.setDate(horizonDate.getDate() + horizonDays);
   const scopedFilter = applyBranchQueryFilter(req, await getScopedLeadFilter(req));
 
-  const leads = await populateLead(
+  const leads = await populateDashboardFollowUps(
     Lead.find({
       ...scopedFilter,
       followUps: {
@@ -1570,9 +2109,7 @@ exports.getDueFollowUps = asyncHandler(async (req, res) => {
           scheduledAt: { $lte: horizonDate },
         },
       },
-    }).select(
-      'firstName lastName name email phone mobile source branchName stream status pipelineStage assignedCounsellor followUps nextFollowUp'
-    )
+    }).select(DASHBOARD_FOLLOW_UP_SELECT)
   );
 
   const overdue = [];
@@ -1581,7 +2118,6 @@ exports.getDueFollowUps = asyncHandler(async (req, res) => {
   const pending = [];
 
   for (const lead of leads) {
-    const changed = syncLeadFollowUps(lead);
     for (const followUp of lead.followUps || []) {
       if (!['pending', 'overdue'].includes(followUp.status)) {
         continue;
@@ -1598,9 +2134,6 @@ exports.getDueFollowUps = asyncHandler(async (req, res) => {
       } else {
         upcoming.push(item);
       }
-    }
-    if (changed) {
-      await lead.save();
     }
   }
 
@@ -1621,23 +2154,17 @@ exports.getDueFollowUps = asyncHandler(async (req, res) => {
 exports.getFollowUps = asyncHandler(async (req, res) => {
   const { page = 1, limit = 20 } = req.query;
   const scopedFilter = applyBranchQueryFilter(req, await getScopedLeadFilter(req));
-  const leads = await populateLead(
+  const leads = await populateDashboardFollowUps(
     Lead.find({
       ...scopedFilter,
       followUps: { $exists: true, $ne: [] },
-    }).select(
-      'firstName lastName name email phone mobile source branchName stream status pipelineStage assignedCounsellor followUps nextFollowUp'
-    )
+    }).select(DASHBOARD_FOLLOW_UP_SELECT)
   );
 
   const items = [];
   for (const lead of leads) {
-    const changed = syncLeadFollowUps(lead);
     for (const followUp of lead.followUps || []) {
       items.push(serializeFollowUp(lead, followUp));
-    }
-    if (changed) {
-      await lead.save();
     }
   }
 
@@ -1667,10 +2194,8 @@ exports.getFollowUpDashboardSummary = asyncHandler(async (req, res) => {
   const contactThreshold = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
 
   const scopedFilter = applyBranchQueryFilter(req, await getScopedLeadFilter(req));
-  const leads = await populateLead(
-    Lead.find(scopedFilter).select(
-      'firstName lastName name email phone mobile source branchName stream status pipelineStage assignedCounsellor followUps nextFollowUp lastContactedAt convertedToStudent'
-    )
+  const leads = await populateDashboardFollowUps(
+    Lead.find(scopedFilter).select(DASHBOARD_FOLLOW_UP_SELECT)
   );
 
   const activeLeadStatuses = new Set(
@@ -1685,7 +2210,6 @@ exports.getFollowUpDashboardSummary = asyncHandler(async (req, res) => {
   const leadsOverdueForContact = [];
 
   for (const lead of leads) {
-    const changed = syncLeadFollowUps(lead);
     const leadItems = [];
 
     for (const followUp of lead.followUps || []) {
@@ -1752,10 +2276,6 @@ exports.getFollowUpDashboardSummary = asyncHandler(async (req, res) => {
         nextFollowUp: lead.nextFollowUp,
       });
     }
-
-    if (changed) {
-      await lead.save();
-    }
   }
 
   const pendingFollowUps = allFollowUps.filter((item) => ['pending', 'overdue'].includes(item.status));
@@ -1773,6 +2293,7 @@ exports.getFollowUpDashboardSummary = asyncHandler(async (req, res) => {
   const completionBase = completedToday.length + todayFollowUps.length + overdueFollowUps.length;
   const completionRate = completionBase ? Math.round((completedToday.length / completionBase) * 100) : 0;
 
+  res.set('Cache-Control', 'private, max-age=15, stale-while-revalidate=30');
   sendSuccess(res, 200, 'Follow-up dashboard summary fetched', {
     role: req.user.role,
     counts: {

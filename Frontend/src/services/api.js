@@ -19,7 +19,15 @@ export const authAPI = {
       { skipAuthHandling: true, timeout: 60000 }
     ),
   getMe: () => api.get('/auth/me'),
-  getUsers: (role) => api.get('/auth/users', { params: role ? { role } : {} }),
+  getUsers: (roleOrParams) => {
+    const params =
+      typeof roleOrParams === 'string'
+        ? roleOrParams
+          ? { role: roleOrParams }
+          : {}
+        : roleOrParams || {};
+    return api.get('/auth/users', { params });
+  },
 };
 
 export const userAPI = {
@@ -49,6 +57,10 @@ export const leadAPI = {
   triggerReminderSweep: () => api.post('/leads/followups/reminders/run'),
   assignCounsellor: (id, counsellorId, reason) =>
     api.post(`/leads/${id}/assign`, { counsellorId, reason }),
+  getAssignments: (id) => api.get(`/leads/${id}/assignments`),
+  saveAssignments: (id, data) => api.post(`/leads/${id}/assignments`, data),
+  removeAssignment: (id, assignmentId) =>
+    api.delete(`/leads/${id}/assignments/${assignmentId}`),
   updateStatus: (id, status) => api.post(`/leads/${id}/status`, { status }),
   scheduleFollowUp: (id, data) => api.post(`/leads/${id}/followup`, data),
   getLeadFollowUps: (id) => api.get(`/leads/${id}/followups`),
@@ -58,6 +70,34 @@ export const leadAPI = {
   convertToStudent: (id) => api.post(`/leads/${id}/convert`),
   recalculateScore: (id) => api.post(`/leads/${id}/score`),
   getActivities: (id) => api.get(`/leads/${id}/activities`),
+  getTransfers: (id) => api.get(`/leads/${id}/transfers`),
+};
+
+export const funnelAPI = {
+  getBoard: (params = {}) => api.get('/funnel/board', { params }),
+  getList: (params = {}) => api.get('/funnel/list', { params }),
+  getAnalytics: (params = {}) => api.get('/funnel/analytics', { params }),
+  getSettings: () => api.get('/funnel/settings'),
+  getStages: () => api.get('/funnel/settings/stages'),
+  saveStage: (data) =>
+    data?.id
+      ? api.patch(`/funnel/settings/stages/${data.id}`, data)
+      : api.post('/funnel/settings/stages', data),
+  reorderStages: (stageIds = []) => api.post('/funnel/settings/stages/reorder', { stageIds }),
+  getLostReasons: () => api.get('/funnel/settings/lost-reasons'),
+  saveLostReason: (data) =>
+    data?.id
+      ? api.patch(`/funnel/settings/lost-reasons/${data.id}`, data)
+      : api.post('/funnel/settings/lost-reasons', data),
+  getAutomations: () => api.get('/funnel/settings/automations'),
+  saveAutomation: (data) =>
+    data?.id
+      ? api.patch(`/funnel/settings/automations/${data.id}`, data)
+      : api.post('/funnel/settings/automations', data),
+  moveLead: (leadId, data) => api.post(`/funnel/leads/${leadId}/move`, data),
+  bulkMove: (data) => api.post('/funnel/bulk/move', data),
+  bulkAssign: (data) => api.post('/funnel/bulk/assign', data),
+  bulkTransfer: (data) => api.post('/funnel/bulk/transfer', data),
 };
 
 // ==================== VISA RULES ====================
@@ -135,8 +175,10 @@ export const visaAPI = {
 
 // ==================== STUDENTS ====================
 export const studentAPI = {
-  getAllStudents: (page = 1, limit = 10, search = '') =>
-    api.get('/students', { params: { page, limit, search } }),
+  getAllStudents: (page = 1, limit = 10, search = '', extraParams = {}) =>
+    api.get('/students', {
+      params: { page, limit, search, ...extraParams },
+    }),
   getStudentById: (id) => api.get(`/students/${id}`),
   createStudent: (data) => api.post('/students', data),
   updateStudent: (id, data) => api.put(`/students/${id}`, data),
@@ -238,8 +280,30 @@ export const reportAPI = {
   getSummary: (params = {}) => api.get('/reports/summary', { params }),
 };
 
+export const intelligenceAPI = {
+  getOverview: (params = {}) => api.get('/intelligence/overview', { params }),
+  listDatasets: (params = {}) => api.get('/intelligence/datasets', { params }),
+  uploadDataset: (formData) =>
+    api.post('/intelligence/datasets/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  getDatasetById: (id) => api.get(`/intelligence/datasets/${id}`),
+  reanalyzeDataset: (id) => api.post(`/intelligence/datasets/${id}/reanalyze`),
+  createDatasetReport: (id) => api.post(`/intelligence/datasets/${id}/report`),
+  listReports: (params = {}) => api.get('/intelligence/reports', { params }),
+  getReportById: (id) => api.get(`/intelligence/reports/${id}`),
+  downloadReportPdf: (id) =>
+    api.get(`/intelligence/reports/${id}/pdf`, { responseType: 'blob' }),
+  updateReportSharing: (id, data = {}) => api.post(`/intelligence/reports/${id}/share`, data),
+  getSharedReport: (token) =>
+    api.get(`/intelligence/share/${token}`, { skipAuthHandling: true }),
+};
+
 export const superAdminAPI = {
   getOverview: () => api.get('/super-admin/overview'),
+  getPlatformTeam: () => api.get('/super-admin/team'),
+  createPlatformTeamUser: (data) => api.post('/super-admin/team', data),
+  updatePlatformTeamUser: (id, data) => api.patch(`/super-admin/team/${id}`, data),
   listTenants: (params = {}) => api.get('/super-admin/tenants', { params }),
   getTenantDetail: (id) => api.get(`/super-admin/tenants/${id}`),
   createTenant: (data) => api.post('/super-admin/tenants', data),
@@ -254,6 +318,14 @@ export const superAdminAPI = {
   getBillingPlans: () => api.get('/super-admin/billing-plans'),
   saveBillingPlan: (data) => api.post('/super-admin/billing-plans', data),
   getAuditLogs: (params = {}) => api.get('/super-admin/audit-logs', { params }),
+  getImportTemplate: () =>
+    api.get('/super-admin/imports/template', { responseType: 'blob' }),
+  previewImport: (formData) =>
+    api.post('/super-admin/imports/preview', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  commitImport: (batchId) => api.post(`/super-admin/imports/${batchId}/commit`),
+  getImportLogs: (params = {}) => api.get('/super-admin/imports/logs', { params }),
 };
 
 export const platformAPI = {

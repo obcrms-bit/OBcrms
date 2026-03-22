@@ -55,6 +55,100 @@ const nextConfig = {
       },
     ];
   },
+  async redirects() {
+    return [
+      {
+        source: '/admin',
+        destination: '/platform/dashboard',
+        permanent: false,
+      },
+      {
+        source: '/admin/overview',
+        destination: '/platform/dashboard',
+        permanent: false,
+      },
+      {
+        source: '/admin/tenants',
+        destination: '/platform/tenants',
+        permanent: false,
+      },
+      {
+        source: '/admin/tenants/:path*',
+        destination: '/platform/tenants/:path*',
+        permanent: false,
+      },
+      {
+        source: '/admin/onboarding',
+        destination: '/platform/onboarding',
+        permanent: false,
+      },
+      {
+        source: '/admin/templates',
+        destination: '/platform/settings',
+        permanent: false,
+      },
+      {
+        source: '/dashboard',
+        destination: '/tenant/dashboard',
+        permanent: false,
+      },
+      {
+        source: '/leads/:path*',
+        destination: '/tenant/leads/:path*',
+        permanent: false,
+      },
+      {
+        source: '/follow-ups',
+        destination: '/tenant/follow-ups',
+        permanent: false,
+      },
+      {
+        source: '/students',
+        destination: '/tenant/students',
+        permanent: false,
+      },
+      {
+        source: '/applications',
+        destination: '/tenant/applications',
+        permanent: false,
+      },
+      {
+        source: '/visa',
+        destination: '/tenant/visa',
+        permanent: false,
+      },
+      {
+        source: '/transfers',
+        destination: '/tenant/transfers',
+        permanent: false,
+      },
+      {
+        source: '/commissions',
+        destination: '/tenant/commissions',
+        permanent: false,
+      },
+      {
+        source: '/reports',
+        destination: '/tenant/reports',
+        permanent: false,
+      },
+      {
+        source: '/organization',
+        destination: '/tenant/settings',
+        permanent: false,
+      },
+      {
+        source: '/automations',
+        destination: '/tenant/automations',
+        permanent: false,
+      },
+      {
+        source: '/public-forms',
+        destination: '/tenant/forms',
+        permanent: false,
+      },
+    ];
+  },
   headers: async () => [
     {
       source: '/:path*',

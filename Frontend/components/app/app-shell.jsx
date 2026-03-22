@@ -3,22 +3,18 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
+  BellRing,
   Building2,
   CreditCard,
   Gauge,
-  Globe2,
   GraduationCap,
   LayoutDashboard,
   LogOut,
-  MessageSquare,
   Paintbrush2,
   Route,
   Search,
-  BellRing,
-  ShieldCheck,
   UserSquare2,
   Users,
-  Wallet,
   Workflow,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
@@ -26,6 +22,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useBranding } from '@/context/BrandingContext';
 import { cn } from '@/lib/utils';
 import { formatRoleLabel, getInitials } from './shared';
+import { getDefaultWorkspacePath, isPlatformUser } from '@/src/apps/shared/routing';
 import { hasPermission, normalizeRoleKey } from '@/src/services/access';
 import { branchAPI, notificationAPI } from '@/src/services/api';
 import {
@@ -35,141 +32,130 @@ import {
 
 const NAV_ITEMS = [
   {
-    href: '/dashboard',
+    href: '/tenant/dashboard',
     label: 'Dashboard',
     icon: LayoutDashboard,
     permission: ['dashboards', 'view'],
   },
   {
-    href: '/admin',
-    label: 'Owner Console',
-    icon: ShieldCheck,
-    roles: ['super_admin'],
-  },
-  {
-    href: '/leads',
+    href: '/tenant/leads',
     label: 'Leads',
     icon: Users,
     permission: ['leads', 'view'],
   },
   {
-    href: '/leads/pipeline',
+    href: '/tenant/pipeline',
     label: 'Pipeline',
     icon: Route,
     permission: ['leads', 'view'],
   },
   {
-    href: '/follow-ups',
+    href: '/tenant/follow-ups',
     label: 'Follow-ups',
     icon: BellRing,
     permission: ['followups', 'view'],
   },
   {
-    href: '/students',
+    href: '/tenant/students',
     label: 'Students',
     icon: GraduationCap,
     permission: ['leads', 'view'],
   },
   {
-    href: '/applications',
+    href: '/tenant/applications',
     label: 'Applications',
     icon: UserSquare2,
     permission: ['applications', 'view'],
   },
   {
-    href: '/visa',
+    href: '/tenant/visa',
     label: 'Visa',
-    icon: ShieldCheck,
-    roles: ['super_admin', 'admin', 'manager', 'counselor', 'follow_up_team', 'branch_manager', 'head_office_admin'],
+    icon: Paintbrush2,
+    roles: [
+      'admin',
+      'tenant_admin',
+      'manager',
+      'counselor',
+      'counsellor',
+      'follow_up_team',
+      'branch_manager',
+      'branch_admin',
+      'head_office_admin',
+      'application_officer',
+    ],
   },
   {
-    href: '/invoices',
-    label: 'Invoices',
-    icon: CreditCard,
-    permission: ['accounting', 'view'],
-  },
-  {
-    href: '/chat',
-    label: 'Chat',
-    icon: MessageSquare,
-    roles: ['super_admin', 'admin', 'manager', 'counselor', 'sales', 'accountant', 'follow_up_team', 'frontdesk', 'agent', 'branch_manager', 'head_office_admin', 'application_officer'],
-  },
-  {
-    href: '/organization',
-    label: 'Organization',
-    icon: ShieldCheck,
-    permission: ['settings', 'view'],
-  },
-  {
-    href: '/catalog',
-    label: 'Catalog',
-    icon: Wallet,
-    permission: ['universities', 'view'],
-  },
-  {
-    href: '/transfers',
+    href: '/tenant/transfers',
     label: 'Transfers',
     icon: Route,
     permission: ['transfers', 'view'],
   },
   {
-    href: '/commissions',
+    href: '/tenant/commissions',
     label: 'Commissions',
     icon: CreditCard,
     permission: ['commissions', 'view'],
   },
   {
-    href: '/reports',
+    href: '/tenant/reports',
     label: 'Reports',
     icon: Gauge,
     permission: ['reports', 'view'],
   },
   {
-    href: '/notifications',
-    label: 'Notifications',
-    icon: BellRing,
-    permission: ['notifications', 'view'],
+    href: '/tenant/branches',
+    label: 'Branches',
+    icon: Building2,
+    permission: ['branches', 'view'],
   },
   {
-    href: '/branding',
-    label: 'Branding',
-    icon: Paintbrush2,
-    permission: ['branding', 'view'],
+    href: '/tenant/users',
+    label: 'Users',
+    icon: Users,
+    permission: ['users', 'view'],
   },
   {
-    href: '/integrations',
-    label: 'Integrations',
-    icon: Globe2,
-    permission: ['integrations', 'view'],
-  },
-  {
-    href: '/automations',
+    href: '/tenant/automations',
     label: 'Automations',
     icon: Workflow,
     permission: ['automations', 'view'],
   },
   {
-    href: '/public-forms',
-    label: 'Public Forms',
+    href: '/tenant/forms',
+    label: 'Forms',
     icon: Route,
     permission: ['publicforms', 'view'],
   },
   {
-    href: '/billing',
-    label: 'Billing',
-    icon: CreditCard,
-    permission: ['billing', 'view'],
+    href: '/tenant/settings',
+    label: 'Settings',
+    icon: Paintbrush2,
+    permission: ['settings', 'view'],
   },
 ];
 
 const withAlpha = (hex, alpha) =>
   /^#([0-9a-f]{6})$/i.test(hex || '') ? `${hex}${alpha}` : hex;
 
+const WORKSPACE_META_CACHE_TTL_MS = 30 * 1000;
+const workspaceMetaCache = new Map();
+
+const getWorkspaceMetaCacheKey = (user) =>
+  `${user?.id || user?._id || 'anonymous'}:${user?.role || ''}:${user?.updatedAt || ''}`;
+
+/**
+ * @param {{
+ *   title: any;
+ *   description?: any;
+ *   children: any;
+ *   actions?: any;
+ * }} props
+ */
 export default function AppShell({
   title,
-  description,
+  description = '',
   children,
-  actions,
+  actions = null,
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -189,6 +175,12 @@ export default function AppShell({
       router.replace('/login');
     }
   }, [isAuthenticated, isLoading, router]);
+
+  useEffect(() => {
+    if (!isLoading && isAuthenticated && isPlatformUser(user)) {
+      router.replace(getDefaultWorkspacePath(user));
+    }
+  }, [isAuthenticated, isLoading, router, user]);
 
   useEffect(() => {
     setSelectedBranchId(getSelectedBranchId());
@@ -212,10 +204,32 @@ export default function AppShell({
         return;
       }
 
+      const canViewBranches = hasPermission(user, 'branches', 'view');
+      const canViewNotifications = hasPermission(user, 'notifications', 'view');
+      const cacheKey = getWorkspaceMetaCacheKey(user);
+      const cachedMeta = workspaceMetaCache.get(cacheKey);
+
+      if (cachedMeta && cachedMeta.expiresAt > Date.now()) {
+        const persistedBranchId = getSelectedBranchId();
+        const isPersistedBranchAccessible = cachedMeta.branches.some(
+          (branch) => String(branch?._id || '') === String(persistedBranchId || '')
+        );
+
+        setBranches(cachedMeta.branches);
+        setUnreadCount(cachedMeta.unreadCount);
+
+        if (persistedBranchId && cachedMeta.branches.length && !isPersistedBranchAccessible) {
+          setSelectedBranchId('');
+          persistSelectedBranchId('');
+        }
+
+        return;
+      }
+
       const requests = await Promise.allSettled([
-        hasPermission(user, 'branches', 'view') ? branchAPI.getBranches() : Promise.resolve(null),
-        hasPermission(user, 'notifications', 'view')
-          ? notificationAPI.getNotifications({ unreadOnly: true, limit: 5 })
+        canViewBranches ? branchAPI.getBranches() : Promise.resolve(null),
+        canViewNotifications
+          ? notificationAPI.getNotifications({ summaryOnly: true })
           : Promise.resolve(null),
       ]);
 
@@ -225,19 +239,23 @@ export default function AppShell({
 
       const nextBranches =
         requests[0].status === 'fulfilled' ? requests[0].value?.data?.data || [] : [];
+      const nextUnreadCount =
+        requests[1].status === 'fulfilled'
+          ? requests[1].value?.data?.data?.unreadCount || 0
+          : 0;
       const persistedBranchId = getSelectedBranchId();
       const isPersistedBranchAccessible = nextBranches.some(
         (branch) => String(branch?._id || '') === String(persistedBranchId || '')
       );
 
-      setBranches(
-        nextBranches
-      );
-      setUnreadCount(
-        requests[1].status === 'fulfilled'
-          ? requests[1].value?.data?.data?.unreadCount || 0
-          : 0
-      );
+      workspaceMetaCache.set(cacheKey, {
+        branches: nextBranches,
+        unreadCount: nextUnreadCount,
+        expiresAt: Date.now() + WORKSPACE_META_CACHE_TTL_MS,
+      });
+
+      setBranches(nextBranches);
+      setUnreadCount(nextUnreadCount);
 
       if (persistedBranchId && nextBranches.length && !isPersistedBranchAccessible) {
         setSelectedBranchId('');
@@ -255,13 +273,17 @@ export default function AppShell({
   const handleWorkspaceSearch = (event) => {
     event.preventDefault();
     const nextSearch = workspaceSearch.trim();
-    router.push(nextSearch ? `/leads?search=${encodeURIComponent(nextSearch)}` : '/leads');
+    router.push(
+      nextSearch
+        ? `/tenant/leads?search=${encodeURIComponent(nextSearch)}`
+        : '/tenant/leads'
+    );
   };
 
   if (isLoading || !isAuthenticated) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[linear-gradient(160deg,#f8fafc_0%,#ecfeff_35%,#eef2ff_100%)] px-4">
-        <div className="rounded-3xl border border-slate-200 bg-white px-6 py-4 text-sm font-medium text-slate-600 shadow-xl shadow-slate-200/60">
+      <div className="flex min-h-screen items-center justify-center px-4">
+        <div className="ds-main-surface text-sm font-medium text-slate-600">
           Preparing your workspace...
         </div>
       </div>
@@ -269,10 +291,10 @@ export default function AppShell({
   }
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#ecfeff_50%,#f8fafc_100%)] text-slate-900">
-      <div className="mx-auto flex max-w-[1600px] flex-col gap-6 px-4 py-4 lg:grid lg:grid-cols-[280px_minmax(0,1fr)]">
+    <div className="min-h-screen text-slate-900">
+      <div className="ds-shell-grid">
         <aside
-          className="rounded-[2rem] border border-slate-200 px-5 py-6 text-slate-200 shadow-[0_30px_80px_rgba(15,23,42,0.22)]"
+          className="ds-sidebar text-slate-200"
           style={{
             background: `linear-gradient(180deg, ${brandSecondary} 0%, ${brandPrimary} 100%)`,
           }}
@@ -292,13 +314,13 @@ export default function AppShell({
                 className="text-xs font-semibold uppercase tracking-[0.25em]"
                 style={{ color: withAlpha(brandAccent, 'dd') }}
               >
-                Enterprise SaaS
+                Tenant Operations
               </p>
               <h1 className="text-lg font-semibold text-white">{brandName}</h1>
             </div>
           </div>
 
-          <div className="mt-8 rounded-3xl border border-white/10 bg-white/5 p-4">
+          <div className="mt-8 rounded-3xl border border-white/10 bg-white/5 p-4 backdrop-blur">
             <div className="flex items-center gap-3">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 text-sm font-semibold text-white">
                 {getInitials(user?.name)}
@@ -319,11 +341,11 @@ export default function AppShell({
                 color: brandAccent,
               }}
             >
-              {formatRoleLabel(user?.role)}
+              {formatRoleLabel(user?.canonicalRole || user?.role)}
             </div>
           </div>
 
-          <nav className="mt-8 space-y-2">
+          <nav className="mt-8 space-y-2" aria-label="Primary navigation">
             {navigationItems.map((item) => {
               const isActive =
                 pathname === item.href || pathname?.startsWith(`${item.href}/`);
@@ -352,12 +374,15 @@ export default function AppShell({
               background: `linear-gradient(135deg, ${withAlpha(brandAccent, '22')} 0%, rgba(255,255,255,0.06) 100%)`,
             }}
           >
-            <p className="text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: brandAccent }}>
-              Deployment Ready
+            <p
+              className="text-xs font-semibold uppercase tracking-[0.2em]"
+              style={{ color: brandAccent }}
+            >
+              Tenant Workspace
             </p>
             <p className="mt-3 text-sm leading-6 text-slate-300">
-              Tenant-aware CRM, public lead capture, branding, and enterprise
-              navigation now run from the same shared workspace.
+              Branch-aware CRM, reports, automations, and operational routing
+              stay isolated inside the tenant workspace with permission-aware navigation.
             </p>
           </div>
 
@@ -372,10 +397,10 @@ export default function AppShell({
         </aside>
 
         <main className="min-w-0">
-          <div className="rounded-[2rem] border border-slate-200 bg-white/90 p-6 shadow-[0_30px_80px_rgba(148,163,184,0.16)] backdrop-blur">
-            <div className="mb-6 flex flex-col gap-4 border-b border-slate-200 pb-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="ds-main-surface">
+            <div className="mb-6 flex flex-col gap-4 border-b border-slate-200/80 pb-6 lg:flex-row lg:items-center lg:justify-between">
               <form
-                className="flex max-w-xl flex-1 items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
+                className="flex max-w-xl flex-1 items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 shadow-sm"
                 onSubmit={handleWorkspaceSearch}
               >
                 <Search className="h-4 w-4 text-slate-400" />
@@ -389,7 +414,7 @@ export default function AppShell({
 
               <div className="flex flex-wrap items-center gap-3">
                 {branches.length ? (
-                  <label className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                  <label className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 shadow-sm">
                     <Building2 className="h-4 w-4 text-slate-400" />
                     <select
                       className="bg-transparent outline-none"
@@ -412,11 +437,11 @@ export default function AppShell({
 
                 {hasPermission(user, 'notifications', 'view') ? (
                   <Link
-                    href="/notifications"
-                    className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-white"
+                    href="/tenant/follow-ups"
+                    className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-white"
                   >
                     <BellRing className="h-4 w-4" />
-                    <span>Notifications</span>
+                    <span>Reminders</span>
                     {unreadCount ? (
                       <span className="inline-flex min-w-[1.5rem] items-center justify-center rounded-full bg-rose-500 px-2 py-0.5 text-xs font-semibold text-white">
                         {unreadCount}
@@ -425,25 +450,22 @@ export default function AppShell({
                   </Link>
                 ) : null}
 
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 shadow-sm">
                   {user?.name}
                 </div>
               </div>
             </div>
 
-            <header className="flex flex-col gap-4 border-b border-slate-200 pb-6 md:flex-row md:items-end md:justify-between">
+            <header className="flex flex-col gap-4 border-b border-slate-200/80 pb-6 md:flex-row md:items-end md:justify-between">
               <div>
-                <p
-                  className="text-xs font-semibold uppercase tracking-[0.25em]"
-                  style={{ color: brandPrimary }}
-                >
+                <p className="ds-eyebrow" style={{ color: brandPrimary }}>
                   {brandName}
                 </p>
-                <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
+                <h2 className="mt-2 text-[clamp(1.8rem,1.3rem+1.5vw,2.5rem)] font-semibold tracking-tight text-slate-950">
                   {title}
                 </h2>
                 {description ? (
-                  <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+                  <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
                     {description}
                   </p>
                 ) : null}

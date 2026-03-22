@@ -39,6 +39,7 @@ const MODULES = [
   'notifications',
   'chat',
   'reports',
+  'platformcontrol',
 ];
 
 const ACTIONS = [
@@ -73,15 +74,38 @@ const ACTIONS = [
 ];
 
 const ROLE_ALIASES = {
-  super_admin: 'head_office_admin',
+  super_admin_manager: 'super_admin_manager',
   admin: 'head_office_admin',
+  tenant_admin: 'head_office_admin',
   manager: 'branch_manager',
+  branch_admin: 'branch_manager',
   counselor: 'follow_up_team',
+  counsellor: 'follow_up_team',
+  finance: 'accountant',
+  operations: 'frontdesk',
+  reception: 'frontdesk',
+  visa_officer: 'application_officer',
   sales: 'frontdesk',
   follow_up: 'follow_up_team',
 };
 
 const DEFAULT_ROLE_TEMPLATES = [
+  {
+    key: 'super_admin_manager',
+    name: 'Super Admin Manager',
+    description: 'Platform team member with permission-driven access to owner controls.',
+    category: 'platform',
+    isHeadOffice: true,
+    permissions: [
+      { module: 'platformcontrol', actions: ['view', 'create', 'edit', 'manage', 'import', 'export'], scopes: [ACCESS_SCOPES.HEAD_OFFICE] },
+      { module: 'dashboards', actions: ['view'], scopes: [ACCESS_SCOPES.HEAD_OFFICE] },
+      { module: 'billing', actions: ['view'], scopes: [ACCESS_SCOPES.HEAD_OFFICE] },
+      { module: 'audit', actions: ['view', 'export'], scopes: [ACCESS_SCOPES.HEAD_OFFICE] },
+      { module: 'imports', actions: ['view', 'preview', 'execute'], scopes: [ACCESS_SCOPES.HEAD_OFFICE] },
+      { module: 'notifications', actions: ['view', 'manage'], scopes: [ACCESS_SCOPES.HEAD_OFFICE] },
+      { module: 'branding', actions: ['view'], scopes: [ACCESS_SCOPES.HEAD_OFFICE] },
+    ],
+  },
   {
     key: 'head_office_admin',
     name: 'Head Office Admin',

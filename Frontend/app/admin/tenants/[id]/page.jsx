@@ -120,7 +120,7 @@ export default function SuperAdminTenantDetailPage() {
     try {
       const response = await superAdminAPI.impersonateTenant(id);
       await login(response.data?.data);
-      router.push('/dashboard');
+      router.push('/tenant/dashboard');
     } catch (requestError) {
       setActionError(
         requestError?.response?.data?.message ||
@@ -244,7 +244,7 @@ export default function SuperAdminTenantDetailPage() {
               {detail?.tenant?.status === 'suspended' ? 'Activate' : 'Suspend'}
             </button>
             <Link
-              href="/admin/tenants"
+              href="/platform/tenants"
               className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
             >
               Back
@@ -528,15 +528,15 @@ export default function SuperAdminTenantDetailPage() {
           <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Quick Links</p>
             <div className="mt-4 grid gap-3">
-              <Link href="/admin/onboarding" className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100">
+              <Link href="/platform/onboarding" className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100">
                 <Sparkles className="h-4 w-4" />
                 New Onboarding
               </Link>
-              <Link href="/admin/templates" className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100">
+              <Link href="/platform/settings" className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100">
                 <Globe2 className="h-4 w-4" />
                 Manage Templates
               </Link>
-              <Link href="/admin/tenants" className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100">
+              <Link href="/platform/tenants" className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100">
                 <CreditCard className="h-4 w-4" />
                 Tenant Search
               </Link>

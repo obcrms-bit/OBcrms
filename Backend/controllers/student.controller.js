@@ -40,6 +40,7 @@ const canManageStudent = (user, student) => {
 exports.getStudents = async (req, res) => {
   try {
     const { page = 1, limit = 10, search = '' } = req.query;
+    const isCompactView = String(req.query.compact || '').toLowerCase() === 'dashboard';
     const query = await getScopedStudentFilter(req);
 
     if (search) {
@@ -50,13 +51,32 @@ exports.getStudents = async (req, res) => {
       ];
     }
 
-    const students = await Student.find(query)
-      .populate('assignedCounselor', 'name email role')
+    if (req.query.branchId && mongoose.Types.ObjectId.isValid(req.query.branchId)) {
+      query.branchId = new mongoose.Types.ObjectId(req.query.branchId);
+    }
+
+    const studentQuery = Student.find(query)
       .limit(limit * 1)
       .skip((page - 1) * limit)
       .sort({ createdAt: -1 });
 
+    if (isCompactView) {
+      studentQuery.select(
+        'fullName firstName lastName branchName dateOfBirth createdAt status assignedCounselor'
+      );
+      studentQuery.populate('assignedCounselor', 'name');
+      studentQuery.lean();
+    } else {
+      studentQuery.populate('assignedCounselor', 'name email role');
+    }
+
+    const students = await studentQuery;
+
     const count = await Student.countDocuments(query);
+
+    if (isCompactView) {
+      res.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=60');
+    }
 
     return sendSuccess(res, 200, 'Students retrieved successfully', {
       students,

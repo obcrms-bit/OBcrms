@@ -3,7 +3,16 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { CalendarClock, Mail, Phone, RefreshCw, Route, UserPlus } from 'lucide-react';
+import {
+  ArrowRightLeft,
+  Building2,
+  CalendarClock,
+  Mail,
+  Phone,
+  RefreshCw,
+  Route,
+  UserPlus,
+} from 'lucide-react';
 import AppShell from '@/components/app/app-shell';
 import {
   CATEGORY_STYLES,
@@ -18,8 +27,12 @@ import {
   ScheduleFollowUpModal,
 } from '@/components/leads/follow-up-modals';
 import { useAuth } from '@/context/AuthContext';
-import { authAPI, leadAPI } from '@/services/api';
+import { authAPI, branchAPI, leadAPI, transferAPI } from '@/src/services/api';
 import { getEntityLabel, hasPermission } from '@/src/services/access';
+import {
+  getLeadAssignees,
+  getLeadPrimaryAssignee,
+} from '@/src/modules/leads/utils/lead-presenters';
 
 const LEAD_STATUSES = [
   'new',
@@ -54,6 +67,16 @@ function DetailCard({ title, items }) {
   );
 }
 
+const normalizeId = (value) => String(value?._id || value?.id || value || '');
+
+const getInitials = (value = '') =>
+  String(value || '')
+    .split(' ')
+    .map((segment) => segment[0] || '')
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+
 export default function LeadDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -64,18 +87,29 @@ export default function LeadDetailPage() {
   const [error, setError] = useState('');
   const [lead, setLead] = useState(null);
   const [counsellors, setCounsellors] = useState([]);
+  const [assignments, setAssignments] = useState([]);
+  const [transfers, setTransfers] = useState([]);
+  const [branches, setBranches] = useState([]);
   const [workflow, setWorkflow] = useState(null);
   const [workflowStages, setWorkflowStages] = useState([]);
   const [activeTab, setActiveTab] = useState('overview');
   const [actionLoading, setActionLoading] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState('');
   const [selectedCounsellorId, setSelectedCounsellorId] = useState('');
+  const [selectedAssigneeIds, setSelectedAssigneeIds] = useState([]);
+  const [primaryAssigneeId, setPrimaryAssigneeId] = useState('');
   const [assignmentReason, setAssignmentReason] = useState('');
+  const [transferDraft, setTransferDraft] = useState({
+    toBranchId: '',
+    toAssigneeId: '',
+    reason: '',
+  });
   const [noteDraft, setNoteDraft] = useState('');
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [selectedFollowUp, setSelectedFollowUp] = useState(null);
 
   const canAssign = hasPermission(user, 'leads', 'assign');
+  const canTransfer = hasPermission(user, 'transfers', 'create');
   const entityLabel = getEntityLabel(lead, 'Client');
 
   const loadLead = async () => {
@@ -83,22 +117,41 @@ export default function LeadDetailPage() {
     setError('');
 
     try {
-      const requests = [leadAPI.getLeadById(leadId)];
-      if (canAssign) {
-        requests.push(authAPI.getUsers());
-      }
-
-      const results = await Promise.all(requests);
-      const nextLead = results[0].data?.data?.lead || null;
-      const nextWorkflow = results[0].data?.data?.workflow || null;
-      const nextWorkflowStages = results[0].data?.data?.workflowStages || [];
+      const [leadResponse, usersResponse, branchesResponse] = await Promise.all([
+        leadAPI.getLeadById(leadId),
+        canAssign || canTransfer ? authAPI.getUsers() : Promise.resolve(null),
+        canTransfer ? branchAPI.getBranches() : Promise.resolve(null),
+      ]);
+      const nextLeadData = leadResponse.data?.data || {};
+      const nextLead = nextLeadData.lead || null;
+      const nextWorkflow = nextLeadData.workflow || null;
+      const nextWorkflowStages = nextLeadData.workflowStages || [];
+      const nextAssignments = nextLeadData.assignments || [];
+      const nextTransfers = nextLeadData.transfers || [];
+      const nextUsers = usersResponse?.data?.data?.users || [];
+      const nextBranches = branchesResponse?.data?.data || [];
+      const assigneeIdsFromLead =
+        nextAssignments.map((assignment) => normalizeId(assignment.userId)) ||
+        getLeadAssignees(nextLead).map((assignee) => normalizeId(assignee));
+      const nextPrimaryAssigneeId = normalizeId(
+        getLeadPrimaryAssignee(nextLead) || nextAssignments.find((assignment) => assignment.isPrimary)?.userId
+      );
 
       setLead(nextLead);
+      setAssignments(nextAssignments);
+      setTransfers(nextTransfers);
+      setBranches(nextBranches);
       setWorkflow(nextWorkflow);
       setWorkflowStages(nextWorkflowStages);
       setSelectedStatus(nextLead?.status || '');
-      setSelectedCounsellorId(nextLead?.assignedCounsellor?._id || '');
-      setCounsellors(canAssign ? results[1]?.data?.data?.users || [] : []);
+      setSelectedCounsellorId(nextPrimaryAssigneeId);
+      setPrimaryAssigneeId(nextPrimaryAssigneeId);
+      setSelectedAssigneeIds(assigneeIdsFromLead.filter(Boolean));
+      setCounsellors(nextUsers);
+      setTransferDraft((current) => ({
+        ...current,
+        toAssigneeId: nextPrimaryAssigneeId,
+      }));
     } catch (requestError) {
       setError(
         requestError?.response?.data?.message ||
@@ -115,7 +168,7 @@ export default function LeadDetailPage() {
       loadLead();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [leadId, canAssign]);
+  }, [leadId, canAssign, canTransfer]);
 
   const orderedActivities = useMemo(
     () => [...(lead?.activities || [])].reverse(),
@@ -129,9 +182,18 @@ export default function LeadDetailPage() {
       ),
     [lead?.followUps]
   );
+  const orderedTransfers = useMemo(
+    () => [...(transfers || [])].sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt)),
+    [transfers]
+  );
   const nextPendingFollowUp = useMemo(
     () => orderedFollowUps.find((followUp) => followUp.status !== 'completed'),
     [orderedFollowUps]
+  );
+  const selectedAssignmentUsers = useMemo(
+    () =>
+      counsellors.filter((member) => selectedAssigneeIds.includes(normalizeId(member))),
+    [counsellors, selectedAssigneeIds]
   );
 
   const runAction = async (callback, fallbackMessage) => {
@@ -183,10 +245,77 @@ export default function LeadDetailPage() {
       return;
     }
 
-    await runAction(
-      () => leadAPI.assignCounsellor(leadId, selectedCounsellorId, assignmentReason),
-      'Failed to assign counsellor.'
+    const nextAssigneeIds = Array.from(
+      new Set([...(selectedAssigneeIds || []), selectedCounsellorId].filter(Boolean))
     );
+
+    await runAction(
+      () =>
+        leadAPI.saveAssignments(leadId, {
+          userIds: nextAssigneeIds,
+          primaryAssigneeId: selectedCounsellorId,
+          reason: assignmentReason,
+        }),
+      'Failed to update lead assignees.'
+    );
+  };
+
+  const handleToggleAssignee = (userId) => {
+    setSelectedAssigneeIds((current) => {
+      const normalizedUserId = normalizeId(userId);
+      const exists = current.includes(normalizedUserId);
+      const nextValue = exists
+        ? current.filter((value) => value !== normalizedUserId)
+        : [...current, normalizedUserId];
+
+      if (!nextValue.includes(primaryAssigneeId)) {
+        setPrimaryAssigneeId(nextValue[0] || '');
+      }
+
+      return nextValue;
+    });
+  };
+
+  const handleSaveAssignments = async () => {
+    await runAction(
+      () =>
+        leadAPI.saveAssignments(leadId, {
+          userIds: selectedAssigneeIds,
+          primaryAssigneeId,
+          reason: assignmentReason,
+        }),
+      'Failed to save lead assignees.'
+    );
+  };
+
+  const handleRemoveAssignment = async (userId) => {
+    await runAction(
+      () => leadAPI.removeAssignment(leadId, userId),
+      'Failed to remove lead assignee.'
+    );
+  };
+
+  const handleCreateTransfer = async () => {
+    if (!transferDraft.toBranchId || !transferDraft.reason.trim()) {
+      return;
+    }
+
+    await runAction(
+      () =>
+        transferAPI.createTransfer({
+          leadId,
+          toBranchId: transferDraft.toBranchId,
+          toAssigneeId: transferDraft.toAssigneeId || undefined,
+          reason: transferDraft.reason.trim(),
+        }),
+      'Failed to create transfer request.'
+    );
+
+    setTransferDraft({
+      toBranchId: '',
+      toAssigneeId: primaryAssigneeId,
+      reason: '',
+    });
   };
 
   const handleConvert = async () => {
@@ -216,13 +345,13 @@ export default function LeadDetailPage() {
       actions={
         <>
           <Link
-            href="/leads"
+            href="/tenant/leads"
             className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
           >
             Back to leads
           </Link>
           <Link
-            href={`/leads/${leadId}/edit`}
+            href={`/tenant/leads/${leadId}/edit`}
             className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
           >
             Edit lead
@@ -335,7 +464,7 @@ export default function LeadDetailPage() {
                 </button>
 
                 <label className="block space-y-2">
-                  <span className="text-sm font-semibold text-slate-700">Counsellor</span>
+                  <span className="text-sm font-semibold text-slate-700">Primary assignee</span>
                   <select
                     disabled={!canAssign}
                     className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-teal-500 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
@@ -364,7 +493,7 @@ export default function LeadDetailPage() {
                   type="button"
                 >
                   <UserPlus className="h-4 w-4" />
-                  Assign counsellor
+                  Save primary assignee
                 </button>
               </div>
             </section>
@@ -429,6 +558,7 @@ export default function LeadDetailPage() {
             <div className="flex flex-wrap gap-2">
               {[
                 ['overview', 'Overview'],
+                ['collaboration', 'Collaboration'],
                 ['timeline', 'Timeline'],
                 ['notes', 'Notes'],
                 ['followups', 'Follow-ups'],
@@ -550,6 +680,298 @@ export default function LeadDetailPage() {
                     )}
                   </div>
                 </section>
+              </div>
+            ) : null}
+
+            {activeTab === 'collaboration' ? (
+              <div className="grid gap-6 2xl:grid-cols-[minmax(0,1fr)_380px]">
+                <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                  <div className="flex flex-col gap-3 border-b border-slate-200 pb-5 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                        Assignment Control
+                      </p>
+                      <h3 className="mt-2 text-xl font-semibold text-slate-900">
+                        Multi-assignee ownership
+                      </h3>
+                      <p className="mt-2 text-sm leading-6 text-slate-500">
+                        Keep one primary owner while allowing branch collaborators and support staff to work on the same lead.
+                      </p>
+                    </div>
+                    <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                      Active branch:{' '}
+                      <span className="font-semibold text-slate-900">
+                        {lead.activeBranch?.name ||
+                          lead.activeBranchId?.name ||
+                          lead.branchName ||
+                          lead.branchId?.name ||
+                          'Not set'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 grid gap-4 lg:grid-cols-2">
+                    {(assignments.length ? assignments : selectedAssignmentUsers).map((assignmentOrUser) => {
+                      const assignmentUser = assignmentOrUser.userId || assignmentOrUser;
+                      const assignmentId = normalizeId(assignmentUser);
+                      const isPrimary =
+                        assignmentOrUser.isPrimary || assignmentId === normalizeId(primaryAssigneeId);
+
+                      return (
+                        <div
+                          key={assignmentId}
+                          className="rounded-3xl border border-slate-200 bg-slate-50 p-4"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-200 text-sm font-semibold text-slate-700">
+                                {getInitials(assignmentUser?.name)}
+                              </div>
+                              <div>
+                                <p className="font-semibold text-slate-900">
+                                  {assignmentUser?.name || 'Unknown user'}
+                                </p>
+                                <p className="text-sm text-slate-500">
+                                  {assignmentUser?.email || 'No email'}
+                                </p>
+                              </div>
+                            </div>
+                            <StatusPill tone={isPrimary ? 'qualified' : 'contacted'}>
+                              {isPrimary ? 'Primary' : 'Collaborator'}
+                            </StatusPill>
+                          </div>
+                          <div className="mt-4 flex flex-wrap gap-3 text-xs text-slate-500">
+                            <span>{assignmentUser?.primaryRoleKey || assignmentUser?.role || 'team'}</span>
+                            {assignmentOrUser?.assignedAt ? (
+                              <span>Assigned {formatDateTime(assignmentOrUser.assignedAt)}</span>
+                            ) : null}
+                          </div>
+                          {canAssign ? (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveAssignment(assignmentId)}
+                              className="mt-4 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-white"
+                            >
+                              Remove
+                            </button>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {canAssign ? (
+                    <div className="mt-6 rounded-3xl border border-slate-200 p-5">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">
+                            Update assignment team
+                          </p>
+                          <p className="mt-1 text-sm text-slate-500">
+                            Select multiple collaborators, then choose one primary owner.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleSaveAssignments}
+                          disabled={actionLoading || !selectedAssigneeIds.length}
+                          className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          Save assignees
+                        </button>
+                      </div>
+
+                      <div className="mt-5 grid gap-3 md:grid-cols-2">
+                        {counsellors.map((member) => {
+                          const memberId = normalizeId(member);
+                          const isSelected = selectedAssigneeIds.includes(memberId);
+
+                          return (
+                            <label
+                              key={memberId}
+                              className={`rounded-2xl border px-4 py-3 transition ${
+                                isSelected
+                                  ? 'border-slate-900 bg-slate-900 text-white'
+                                  : 'border-slate-200 bg-slate-50 text-slate-800 hover:bg-white'
+                              }`}
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="flex items-start gap-3">
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={() => handleToggleAssignee(memberId)}
+                                    className="mt-1"
+                                  />
+                                  <div>
+                                    <p className="font-semibold">{member.name}</p>
+                                    <p className={`text-sm ${isSelected ? 'text-slate-200' : 'text-slate-500'}`}>
+                                      {member.email}
+                                    </p>
+                                  </div>
+                                </div>
+                                <input
+                                  type="radio"
+                                  name="primaryAssignee"
+                                  checked={primaryAssigneeId === memberId}
+                                  disabled={!isSelected}
+                                  onChange={() => setPrimaryAssigneeId(memberId)}
+                                />
+                              </div>
+                            </label>
+                          );
+                        })}
+                      </div>
+
+                      <textarea
+                        className="mt-5 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-teal-500 focus:bg-white"
+                        rows={3}
+                        placeholder="Why are you changing ownership or adding collaborators?"
+                        value={assignmentReason}
+                        onChange={(event) => setAssignmentReason(event.target.value)}
+                      />
+                    </div>
+                  ) : null}
+                </section>
+
+                <div className="space-y-6">
+                  <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
+                        <ArrowRightLeft className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                          Branch Transfer
+                        </p>
+                        <h3 className="mt-1 text-lg font-semibold text-slate-900">
+                          Move lead between branches
+                        </h3>
+                      </div>
+                    </div>
+
+                    {canTransfer ? (
+                      <div className="mt-5 space-y-4">
+                        <label className="block space-y-2">
+                          <span className="text-sm font-semibold text-slate-700">Destination branch</span>
+                          <select
+                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-teal-500 focus:bg-white"
+                            value={transferDraft.toBranchId}
+                            onChange={(event) =>
+                              setTransferDraft((current) => ({
+                                ...current,
+                                toBranchId: event.target.value,
+                              }))
+                            }
+                          >
+                            <option value="">Select branch</option>
+                            {branches.map((branch) => (
+                              <option key={branch._id} value={branch._id}>
+                                {branch.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+
+                        <label className="block space-y-2">
+                          <span className="text-sm font-semibold text-slate-700">Next primary assignee</span>
+                          <select
+                            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-teal-500 focus:bg-white"
+                            value={transferDraft.toAssigneeId}
+                            onChange={(event) =>
+                              setTransferDraft((current) => ({
+                                ...current,
+                                toAssigneeId: event.target.value,
+                              }))
+                            }
+                          >
+                            <option value="">Keep unassigned</option>
+                            {counsellors.map((member) => (
+                              <option key={member._id} value={member._id}>
+                                {member.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+
+                        <textarea
+                          rows={4}
+                          className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-teal-500 focus:bg-white"
+                          placeholder="Why is this lead moving branches?"
+                          value={transferDraft.reason}
+                          onChange={(event) =>
+                            setTransferDraft((current) => ({
+                              ...current,
+                              reason: event.target.value,
+                            }))
+                          }
+                        />
+
+                        <button
+                          type="button"
+                          onClick={handleCreateTransfer}
+                          disabled={
+                            actionLoading ||
+                            !transferDraft.toBranchId ||
+                            !transferDraft.reason.trim()
+                          }
+                          className="w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          Submit transfer
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="mt-4 text-sm leading-6 text-slate-500">
+                        You can review transfer history here, but you do not have permission to move this lead between branches.
+                      </p>
+                    )}
+                  </section>
+
+                  <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
+                        <Building2 className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                          Transfer Timeline
+                        </p>
+                        <h3 className="mt-1 text-lg font-semibold text-slate-900">
+                          Branch movement history
+                        </h3>
+                      </div>
+                    </div>
+
+                    <div className="mt-5 space-y-4">
+                      {orderedTransfers.length === 0 ? (
+                        <p className="text-sm text-slate-500">No transfer activity recorded yet.</p>
+                      ) : (
+                        orderedTransfers.map((transfer) => (
+                          <div key={transfer._id} className="rounded-2xl border border-slate-200 p-4">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <StatusPill tone={transfer.transferStatus}>
+                                {String(transfer.transferStatus || '').replace(/_/g, ' ')}
+                              </StatusPill>
+                              <span className="text-xs text-slate-500">
+                                {formatDateTime(transfer.transferredAt || transfer.requestedAt || transfer.createdAt)}
+                              </span>
+                            </div>
+                            <p className="mt-3 text-sm font-semibold text-slate-900">
+                              {(transfer.fromBranchId?.name || 'Unassigned branch')} to {transfer.toBranchId?.name || 'Target branch'}
+                            </p>
+                            <p className="mt-2 text-sm leading-6 text-slate-600">
+                              {transfer.transferReason}
+                            </p>
+                            <div className="mt-3 flex flex-wrap gap-4 text-xs text-slate-500">
+                              {transfer.requestedBy?.name ? <span>Requested by {transfer.requestedBy.name}</span> : null}
+                              {transfer.toAssigneeId?.name ? <span>Assignee {transfer.toAssigneeId.name}</span> : null}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </section>
+                </div>
               </div>
             ) : null}
 

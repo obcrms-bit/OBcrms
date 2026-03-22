@@ -194,6 +194,7 @@ const leadSchema = new mongoose.Schema(
       index: true,
     },
     branchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Branch', index: true },
+    activeBranchId: { type: mongoose.Schema.Types.ObjectId, ref: 'Branch', index: true },
     createdByUser: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
     createdByAgentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Agent', index: true },
     ownerUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
@@ -300,6 +301,11 @@ const leadSchema = new mongoose.Schema(
       default: 'new',
       index: true,
     },
+    currentFunnelStageId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'FunnelStage',
+      index: true,
+    },
     pipelineStage: {
       type: String,
       default: 'new',
@@ -316,6 +322,8 @@ const leadSchema = new mongoose.Schema(
 
     assignedCounsellor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    primaryAssigneeId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
+    assigneeIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true }],
     assignmentHistory: [
       {
         counsellor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -338,6 +346,8 @@ const leadSchema = new mongoose.Schema(
     convertedToStudent: { type: Boolean, default: false },
     studentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Student' },
     convertedAt: { type: Date },
+    lostReasonId: { type: mongoose.Schema.Types.ObjectId, ref: 'LostReason', index: true },
+    lostReasonLabel: { type: String, trim: true, default: '' },
 
     ownershipLocked: { type: Boolean, default: false, index: true },
     ownershipLockedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -378,6 +388,7 @@ const leadSchema = new mongoose.Schema(
     interestedCountry: { type: String, trim: true },
     priority: { type: String, enum: ['low', 'medium', 'high', 'urgent'], default: 'medium' },
     aiScore: { type: Number, min: 0, max: 100, default: 0 },
+    formId: { type: mongoose.Schema.Types.ObjectId, ref: 'PublicLeadForm', index: true },
     metadata: { type: mongoose.Schema.Types.Mixed },
   },
   {
@@ -402,6 +413,10 @@ leadSchema.virtual('activityLogs').get(function activityLogsGetter() {
   return this.activities || [];
 });
 
+leadSchema.virtual('tenantId').get(function tenantIdGetter() {
+  return this.companyId;
+});
+
 leadSchema.pre('save', function syncLegacyFields(next) {
   if (this.name && (!this.firstName || !this.lastName)) {
     const parts = String(this.name).trim().split(/\s+/);
@@ -418,11 +433,27 @@ leadSchema.pre('save', function syncLegacyFields(next) {
     this.mobile = this.phone;
   }
 
+  if (this.activeBranchId && !this.branchId) {
+    this.branchId = this.activeBranchId;
+  }
+  if (this.branchId && !this.activeBranchId) {
+    this.activeBranchId = this.branchId;
+  }
+
   if (this.assignedCounsellor && !this.assignedTo) {
     this.assignedTo = this.assignedCounsellor;
   }
   if (this.assignedTo && !this.assignedCounsellor) {
     this.assignedCounsellor = this.assignedTo;
+  }
+  if (this.primaryAssigneeId && !this.assignedCounsellor) {
+    this.assignedCounsellor = this.primaryAssigneeId;
+  }
+  if (this.assignedCounsellor && !this.primaryAssigneeId) {
+    this.primaryAssigneeId = this.assignedCounsellor;
+  }
+  if (this.primaryAssigneeId && !this.assignedTo) {
+    this.assignedTo = this.primaryAssigneeId;
   }
   if (this.assignedCounsellor && !this.ownerUserId) {
     this.ownerUserId = this.assignedCounsellor;
@@ -430,6 +461,20 @@ leadSchema.pre('save', function syncLegacyFields(next) {
   if (!this.ownerUserId && this.createdByUser) {
     this.ownerUserId = this.createdByUser;
   }
+
+  const nextAssigneeIds = Array.from(
+    new Set(
+      [
+        ...(Array.isArray(this.assigneeIds) ? this.assigneeIds : []),
+        this.primaryAssigneeId,
+        this.assignedCounsellor,
+        this.assignedTo,
+      ]
+        .map((value) => (value ? String(value) : ''))
+        .filter(Boolean)
+    )
+  );
+  this.assigneeIds = nextAssigneeIds;
 
   if (this.courseLevel && !this.preferredStudyLevel) {
     this.preferredStudyLevel = this.courseLevel;
@@ -506,7 +551,10 @@ leadSchema.index({ companyId: 1, stage: 1 });
 leadSchema.index({ companyId: 1, leadScore: -1 });
 leadSchema.index({ companyId: 1, nextFollowUp: 1 });
 leadSchema.index({ companyId: 1, assignedCounsellor: 1 });
+leadSchema.index({ companyId: 1, primaryAssigneeId: 1 });
+leadSchema.index({ companyId: 1, assigneeIds: 1 });
 leadSchema.index({ companyId: 1, branchId: 1, assignedCounsellor: 1 });
+leadSchema.index({ companyId: 1, activeBranchId: 1, primaryAssigneeId: 1 });
 leadSchema.index({ companyId: 1, serviceType: 1, entityType: 1 });
 leadSchema.index({ companyId: 1, ownershipLocked: 1 });
 leadSchema.index({ companyId: 1, createdAt: -1 });

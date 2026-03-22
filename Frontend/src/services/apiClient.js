@@ -7,6 +7,7 @@ import {
   emitAuthExpired,
   getStoredRefreshToken,
   getStoredSession,
+  getStoredTenantId,
   getStoredToken,
   setStoredSession,
 } from './session';
@@ -31,6 +32,10 @@ const attachSessionHeaders = (config) => {
 
   nextConfig.baseURL = getApiBaseUrl();
   nextConfig.headers = nextConfig.headers || {};
+
+  if (typeof FormData !== 'undefined' && nextConfig.data instanceof FormData) {
+    delete nextConfig.headers['Content-Type'];
+  }
 
   if (token) {
     nextConfig.headers.Authorization = `Bearer ${token}`;

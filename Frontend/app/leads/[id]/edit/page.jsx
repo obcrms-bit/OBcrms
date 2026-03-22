@@ -1,9 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import AppShell from '@/components/app/app-shell';
-import { ErrorState, LoadingState } from '@/components/app/shared';
+import {
+  InlineStats,
+  PageHero,
+  SectionCard,
+  SectionHeader,
+} from '@/components/app/design-system';
+import { ErrorState, LoadingState, StatusPill } from '@/components/app/shared';
 import LeadForm from '@/components/leads/lead-form';
 import { useAuth } from '@/context/AuthContext';
 import { authAPI, branchAPI, leadAPI } from '@/services/api';
@@ -23,74 +29,64 @@ export default function EditLeadPage() {
   const [counsellors, setCounsellors] = useState([]);
   const [countryWorkflows, setCountryWorkflows] = useState([]);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const loadPage = useCallback(async () => {
+  useEffect(() => {
     let active = true;
-    setLoading(true);
-    setError('');
 
-    try {
-      const [leadResult, branchResult, userResult, workflowResult] = await Promise.allSettled([
-        leadAPI.getLeadById(leadId),
-        branchAPI.getBranches(),
-        hasPermission(user, 'leads', 'assign') ? authAPI.getUsers() : Promise.resolve(null),
-        leadAPI.getWorkflows(),
-      ]);
-
-      if (!active) {
-        return () => {
-          active = false;
-        };
+    const loadPage = async () => {
+      if (!leadId || !(user?.id || user?._id)) {
+        return;
       }
 
-      if (leadResult.status === 'rejected') {
-        throw leadResult.reason;
-      }
+      setLoading(true);
+      setError('');
 
-      setLead(leadResult.value.data?.data?.lead || null);
-      setBranches(branchResult.status === 'fulfilled' ? branchResult.value.data?.data || [] : []);
-      setCounsellors(
-        userResult.status === 'fulfilled' ? userResult.value?.data?.data?.users || [] : []
-      );
-      setCountryWorkflows(
-        workflowResult.status === 'fulfilled'
-          ? workflowResult.value?.data?.data?.workflows || []
-          : []
-      );
-    } catch (requestError) {
-      if (active) {
-        setError(
-          requestError?.response?.data?.message ||
-            requestError?.message ||
-            'Failed to load the lead for editing.'
+      try {
+        const [leadResult, branchResult, userResult, workflowResult] = await Promise.allSettled([
+          leadAPI.getLeadById(leadId),
+          branchAPI.getBranches(),
+          hasPermission(user, 'leads', 'assign') ? authAPI.getUsers() : Promise.resolve(null),
+          leadAPI.getWorkflows(),
+        ]);
+
+        if (!active) {
+          return;
+        }
+
+        if (leadResult.status === 'rejected') {
+          throw leadResult.reason;
+        }
+
+        setLead(leadResult.value.data?.data?.lead || null);
+        setBranches(branchResult.status === 'fulfilled' ? branchResult.value.data?.data || [] : []);
+        setCounsellors(
+          userResult.status === 'fulfilled' ? userResult.value?.data?.data?.users || [] : []
         );
+        setCountryWorkflows(
+          workflowResult.status === 'fulfilled'
+            ? workflowResult.value?.data?.data?.workflows || []
+            : []
+        );
+      } catch (requestError) {
+        if (active) {
+          setError(
+            requestError?.response?.data?.message ||
+              requestError?.message ||
+              'Failed to load the lead for editing.'
+          );
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
       }
-    } finally {
-      if (active) {
-        setLoading(false);
-      }
-    }
+    };
+
+    loadPage();
 
     return () => {
       active = false;
     };
   }, [leadId, user]);
-
-  useEffect(() => {
-    let cleanup = () => {};
-
-    if (leadId && (user?.id || user?._id)) {
-      loadPage().then((callback) => {
-        if (typeof callback === 'function') {
-          cleanup = callback;
-        }
-      });
-    }
-
-    return () => {
-      cleanup();
-    };
-  }, [leadId, loadPage, user?.id, user?._id]);
 
   const handleSubmit = async (payload, form) => {
     setSubmitting(true);
@@ -101,7 +97,7 @@ export default function EditLeadPage() {
       if (form?.initialNote?.trim()) {
         await leadAPI.addNote(leadId, form.initialNote.trim());
       }
-      router.push(`/leads/${leadId}`);
+      router.push(`/tenant/leads/${leadId}`);
     } catch (requestError) {
       setError(
         requestError?.response?.data?.message ||
@@ -113,14 +109,26 @@ export default function EditLeadPage() {
     }
   };
 
+  const heroStats = useMemo(
+    () => [
+      { label: 'Service Type', value: lead?.serviceType || 'consultancy', helper: 'Current record type' },
+      { label: 'Preferred Countries', value: lead?.preferredCountries?.length || 0, helper: 'Country routing tags' },
+      { label: 'Qualifications', value: lead?.qualifications?.length || 0, helper: 'Education rows on record' },
+      { label: 'Notes', value: lead?.notes?.length || 0, helper: 'Historical notes preserved' },
+    ],
+    [lead]
+  );
+
   return (
     <AppShell
       title={lead ? `Edit ${lead.fullName || lead.name}` : 'Edit Lead'}
       description="Update the full lead profile without losing the existing activity trail, assignment history, or qualification records."
       actions={
         <button
-          className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-          onClick={() => router.push(leadId ? `/leads/${leadId}` : '/leads')}
+          className="ds-button-secondary"
+          onClick={() =>
+            router.push(leadId ? `/tenant/leads/${leadId}` : '/tenant/leads')
+          }
           type="button"
         >
           Back
@@ -129,20 +137,75 @@ export default function EditLeadPage() {
     >
       {loading ? <LoadingState label="Loading lead editor..." /> : null}
       {!loading ? (
-        <div className="space-y-6">
-          {error ? <ErrorState message={error} /> : null}
+        <div className="ds-page-stack">
           {lead ? (
-            <LeadForm
-              branches={branches}
-              counsellors={counsellors}
-              countryWorkflows={countryWorkflows}
-              initialValue={lead}
-              mode="edit"
-              onSubmit={handleSubmit}
-              submitLabel="Save changes"
-              submitting={submitting}
-            />
+            <PageHero
+              eyebrow="Lead Editor"
+              title={`Preserve and update ${lead.fullName || lead.name}`}
+              description="This edit screen keeps the same lead mapping and note submission flow, while improving readability and review context for admins and counsellors."
+              aside={<InlineStats columns={2} items={heroStats} />}
+            >
+              <div className="flex flex-wrap gap-2">
+                <StatusPill tone={lead.pipelineStage || lead.status}>
+                  {String(lead.pipelineStage || lead.status || 'active').replace(/_/g, ' ')}
+                </StatusPill>
+                {lead.branchName ? <StatusPill tone="pending">{lead.branchName}</StatusPill> : null}
+              </div>
+            </PageHero>
           ) : null}
+
+          {error ? <ErrorState message={error} /> : null}
+
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="min-w-0">
+              {lead ? (
+                <LeadForm
+                  branches={branches}
+                  counsellors={counsellors}
+                  countryWorkflows={countryWorkflows}
+                  initialValue={lead}
+                  mode="edit"
+                  onSubmit={handleSubmit}
+                  onCancel={() =>
+                    router.push(
+                      leadId ? `/tenant/leads/${leadId}` : '/tenant/leads'
+                    )
+                  }
+                  cancelLabel="Cancel"
+                  submitLabel="Save changes"
+                  submitting={submitting}
+                />
+              ) : null}
+            </div>
+
+            <div className="space-y-6">
+              <SectionCard>
+                <SectionHeader
+                  eyebrow="Current Ownership"
+                  title="Assignment snapshot"
+                  description="These values come from the existing lead record and remain bound to the same backend fields."
+                />
+                <div className="mt-5 space-y-3 text-sm text-slate-600">
+                  <p>Branch: {lead?.branchName || lead?.branchId?.name || 'Unassigned'}</p>
+                  <p>Assignee: {lead?.assignedCounsellor?.name || 'Unassigned'}</p>
+                  <p>Source: {lead?.source || 'Not set'}</p>
+                </div>
+              </SectionCard>
+
+              <SectionCard tone="accent">
+                <SectionHeader
+                  eyebrow="Support Data"
+                  title="Live dependencies"
+                  description="All dropdown sources still come from the same APIs used before the refactor."
+                />
+                <div className="mt-5 space-y-3 text-sm text-slate-600">
+                  <p>{branches.length || 0} branch options loaded.</p>
+                  <p>{counsellors.length || 0} staff options loaded.</p>
+                  <p>{countryWorkflows.length || 0} workflow definitions loaded.</p>
+                </div>
+              </SectionCard>
+            </div>
+          </div>
         </div>
       ) : null}
     </AppShell>

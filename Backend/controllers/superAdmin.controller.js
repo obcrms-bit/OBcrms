@@ -26,6 +26,7 @@ const {
 } = require('../services/superAdminConfig.service');
 
 const JWT_SECRET = process.env.JWT_SECRET;
+const PLATFORM_TEAM_ROLES = ['super_admin', 'super_admin_manager'];
 
 const normalizeStatus = (company, subscription) => {
   if (!company?.isActive || company?.isPaused || subscription?.status === 'inactive') {
@@ -139,6 +140,181 @@ const serializeTenantUser = async (user, company = null) => {
       : undefined,
     isActive: user.isActive,
   };
+};
+
+const canManagePlatformOwnerRole = (req) => req.user?.role === 'super_admin';
+
+exports.listPlatformTeam = async (req, res) => {
+  try {
+    const company = await Company.findById(req.companyId).lean();
+    const users = await User.find({
+      companyId: req.companyId,
+      role: { $in: PLATFORM_TEAM_ROLES },
+      deletedAt: null,
+    })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const serializedUsers = await Promise.all(
+      users.map((user) => serializeTenantUser(user, company))
+    );
+
+    return sendSuccess(res, 200, 'Platform team fetched successfully', {
+      users: serializedUsers,
+    });
+  } catch (error) {
+    return sendError(res, 500, 'Failed to fetch platform team', error.message);
+  }
+};
+
+exports.createPlatformTeamUser = async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+    const requestedRole =
+      String(req.body.role || req.body.primaryRoleKey || 'super_admin_manager')
+        .trim()
+        .toLowerCase() === 'super_admin'
+        ? 'super_admin'
+        : 'super_admin_manager';
+
+    if (!name || !email || !password) {
+      return sendError(res, 400, 'name, email, and password are required');
+    }
+    if (requestedRole === 'super_admin' && !canManagePlatformOwnerRole(req)) {
+      return sendError(res, 403, 'Only the platform owner can create another super admin.');
+    }
+
+    const existingUser = await User.findOne({
+      companyId: req.companyId,
+      email: String(email).trim().toLowerCase(),
+    });
+    if (existingUser) {
+      return sendError(res, 409, 'A platform team user with this email already exists.');
+    }
+
+    const company = await Company.findById(req.companyId);
+    const user = new User({
+      companyId: req.companyId,
+      branchId: company?.headOfficeBranchId || null,
+      name,
+      email: String(email).trim().toLowerCase(),
+      password,
+      role: requestedRole,
+      primaryRoleKey: requestedRole,
+      permissionBundleIds: Array.isArray(req.body.permissionBundleIds)
+        ? req.body.permissionBundleIds
+        : [],
+      permissions: Array.isArray(req.body.permissions) ? req.body.permissions : [],
+      fieldAccessOverrides:
+        req.body.fieldAccessOverrides && typeof req.body.fieldAccessOverrides === 'object'
+          ? req.body.fieldAccessOverrides
+          : {},
+      isHeadOffice: true,
+      managerEnabled: true,
+      isActive: req.body.isActive !== false,
+      invitedBy: req.user?._id,
+    });
+    await user.save();
+
+    await logOwnerAction(req, {
+      companyId: req.companyId,
+      action: 'platform_team_user_created',
+      module: 'super_admin',
+      resource: 'platform_user',
+      resourceId: user._id,
+      resourceName: user.email,
+      changes: {
+        after: {
+          email: user.email,
+          role: user.role,
+        },
+      },
+    });
+
+    const serializedUser = await serializeTenantUser(user, company);
+    return sendSuccess(res, 201, 'Platform team user created successfully', {
+      user: serializedUser,
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      return sendError(res, 409, 'A platform team user with this email already exists.');
+    }
+    return sendError(res, 500, 'Failed to create platform team user', error.message);
+  }
+};
+
+exports.updatePlatformTeamUser = async (req, res) => {
+  try {
+    const user = await User.findOne({
+      _id: req.params.id,
+      companyId: req.companyId,
+      role: { $in: PLATFORM_TEAM_ROLES },
+      deletedAt: null,
+    });
+
+    if (!user) {
+      return sendError(res, 404, 'Platform team user not found');
+    }
+
+    const requestedRole =
+      typeof req.body.role === 'string' || typeof req.body.primaryRoleKey === 'string'
+        ? String(req.body.role || req.body.primaryRoleKey).trim().toLowerCase()
+        : '';
+
+    if (requestedRole) {
+      if (!PLATFORM_TEAM_ROLES.includes(requestedRole)) {
+        return sendError(res, 400, 'Invalid platform team role');
+      }
+      if (requestedRole === 'super_admin' && !canManagePlatformOwnerRole(req)) {
+        return sendError(res, 403, 'Only the platform owner can promote another super admin.');
+      }
+      user.role = requestedRole;
+      user.primaryRoleKey = requestedRole;
+    }
+
+    if (typeof req.body.name === 'string') {
+      user.name = req.body.name.trim();
+    }
+    if (typeof req.body.isActive !== 'undefined') {
+      user.isActive = Boolean(req.body.isActive);
+    }
+    if (Array.isArray(req.body.permissionBundleIds)) {
+      user.permissionBundleIds = req.body.permissionBundleIds;
+    }
+    if (Array.isArray(req.body.permissions)) {
+      user.permissions = req.body.permissions;
+    }
+    if (req.body.fieldAccessOverrides && typeof req.body.fieldAccessOverrides === 'object') {
+      user.fieldAccessOverrides = req.body.fieldAccessOverrides;
+    }
+    user.isHeadOffice = true;
+    user.managerEnabled = true;
+
+    await user.save();
+
+    await logOwnerAction(req, {
+      companyId: req.companyId,
+      action: 'platform_team_user_updated',
+      module: 'super_admin',
+      resource: 'platform_user',
+      resourceId: user._id,
+      resourceName: user.email,
+      changes: {
+        after: {
+          role: user.role,
+          isActive: user.isActive,
+        },
+      },
+    });
+
+    const company = await Company.findById(req.companyId).lean();
+    const serializedUser = await serializeTenantUser(user, company);
+    return sendSuccess(res, 200, 'Platform team user updated successfully', {
+      user: serializedUser,
+    });
+  } catch (error) {
+    return sendError(res, 500, 'Failed to update platform team user', error.message);
+  }
 };
 
 const generateCompanyId = async () => {

@@ -1,14 +1,15 @@
-# React Frontend Setup & Running Guide
+# Frontend Setup & Running Guide
 
 ## Overview
-The React frontend provides two separate dashboards:
-- **Admin Dashboard**: Full CRUD for students, assign counselors, view analytics
-- **Counselor Dashboard**: View assigned students, update status and notes
+The live frontend is a **Next.js SaaS application** for:
+- Super Admin control plane
+- Tenant CRM dashboard
+- Leads, follow-ups, applications, billing, and operations workflows
 
 ## Installation
 
 ### Prerequisites
-- Node.js v16+ and npm
+- Node.js v18.18+ and npm
 - Backend server running on `https://obcrms-backend.onrender.com`
 
 ### Steps
@@ -31,7 +32,7 @@ The React frontend provides two separate dashboards:
 
 4. **Start development server**
    ```bash
-   npm start
+   npm run dev
    ```
    The app will open at `http://localhost:3000`
 
@@ -52,9 +53,9 @@ node server.js
 ```bash
 cd Frontend
 npm install
-npm start
-# Output: Compiled successfully!
-#         Local: http://localhost:3000
+npm run dev
+# Output:
+# Local: http://localhost:3000
 ```
 
 **Terminal 3 - MongoDB (if running locally):**
@@ -111,6 +112,19 @@ Content-Type: application/json
 ```
 
 This manual example is for development only. It does not create a `super_admin`.
+
+## QA And UI Docs
+
+- Design system: [DESIGN_SYSTEM.md](./DESIGN_SYSTEM.md)
+- QA validation: [QA_VALIDATION.md](./QA_VALIDATION.md)
+
+### API Smoke Check
+```bash
+$env:QA_API_URL='https://obcrms-backend.onrender.com/api'
+$env:QA_EMAIL='owner@trusteducation.com'
+$env:QA_PASSWORD='StrongPassword123!'
+npm run qa:smoke
+```
 
 **Register Counselor:**
 ```

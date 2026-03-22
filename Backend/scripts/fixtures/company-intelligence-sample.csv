@@ -1,0 +1,10 @@
+lead_name,email,mobile,lead_stage,lead_source,amount,created_date,counsellor,branch_name,course_name,converted,score
+Anjana Thapa,anjana@example.com,9800000001,enquiry,website,1200,2026-01-04,Prakriti Tiwari,Kathmandu,Global MBA,yes,82
+Rohit Adhikari,rohit@example.com,9800000002,counselling,facebook,0,2026-01-06,Kanchan Poudyal,Pokhara,IELTS,no,51
+Sujan Basnet,sujan@example.com,9800000003,docs,referral,2200,2026-01-08,Prakriti Tiwari,Kathmandu,BSc Nursing,yes,74
+Nisha Karki,nisha@example.com,9800000004,enquiry,website,,2026-01-11,,Kathmandu,MSc IT,,48
+Nisha Karki,nisha@example.com,9800000004,enquiry,website,,2026-01-11,,Kathmandu,MSc IT,,48
+Puja Gurung,puja@example.com,9800000005,visa,agent,3500,2026-02-01,Anjana Dhakal,Butwal,Bachelor of Business,yes,90
+Kabir Rai,,9800000006,counselling,walk_in,450,13/02/2026,Kanchan Poudyal,Kathmandu,PTE,no,
+Rina Khatri,rina@example.com,,offer_received,website,4100,2026-02-18,Prakriti Tiwari,Kathmandu,MBA,yes,88
+Test Prep Student,prep@example.com,9800000008,student,website,650,2026-03-01,Anjana Dhakal,Lalitpur,IELTS,yes,67

@@ -1,3 +1,6 @@
+const { normalizeRoleKey } = require('../constants/rbac');
+const { hasPermission } = require('../services/accessControl.service');
+
 /**
  * Authorization Middleware
  *
@@ -9,6 +12,11 @@
  * - manager: Can manage counselors and some reports
  * - counselor: Can see assigned students only
  */
+
+const isPlatformControlUser = (user) =>
+  ['super_admin', 'super_admin_manager'].includes(
+    normalizeRoleKey(user?.effectiveAccess?.roleKey || user?.primaryRoleKey || user?.role)
+  );
 
 /**
  * Check if user has required role
@@ -185,15 +193,45 @@ const checkUserAccess = (req, res, next) => {
  * router.get("/admin/companies", checkSuperAdmin, adminController.getCompanies);
  */
 const checkSuperAdmin = (req, res, next) => {
-  if (req.user.role !== 'super_admin') {
+  if (!isPlatformControlUser(req.user)) {
     return res.status(403).json({
       success: false,
       message: 'Unauthorized',
-      error: 'Only super administrators can access this resource',
+      error: 'Only platform control users can access this resource',
     });
   }
 
   next();
+};
+
+const checkPlatformControlAccess = (action = 'view') => {
+  return (req, res, next) => {
+    if (!isPlatformControlUser(req.user)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Unauthorized',
+        error: 'Only platform control users can access this resource',
+      });
+    }
+
+    const roleKey = normalizeRoleKey(
+      req.user?.effectiveAccess?.roleKey || req.user?.primaryRoleKey || req.user?.role
+    );
+
+    if (roleKey === 'super_admin') {
+      return next();
+    }
+
+    if (hasPermission(req.user, 'platformcontrol', action)) {
+      return next();
+    }
+
+    return res.status(403).json({
+      success: false,
+      message: 'Insufficient permissions',
+      error: `Missing platformcontrol.${action} permission`,
+    });
+  };
 };
 
 /**
@@ -220,5 +258,6 @@ module.exports = {
   checkUserManagement,
   checkUserAccess,
   checkSuperAdmin,
+  checkPlatformControlAccess,
   hasRoleHierarchy,
 };

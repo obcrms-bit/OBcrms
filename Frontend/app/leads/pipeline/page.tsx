@@ -131,7 +131,7 @@ export default function PipelinePage() {
           </button>
           <Link
             className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
-            href="/leads/create"
+            href="/tenant/leads/create"
           >
             Create lead
           </Link>

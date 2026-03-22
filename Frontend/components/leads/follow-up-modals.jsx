@@ -25,8 +25,7 @@ const overlayClassName =
 const panelClassName =
   'w-full max-w-2xl rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_30px_80px_rgba(15,23,42,0.18)]';
 
-const inputClassName =
-  'w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-teal-500 focus:bg-white';
+const inputClassName = 'ds-field w-full';
 
 function ModalFrame({ title, description, onClose, children }) {
   useEffect(() => {
@@ -51,7 +50,7 @@ function ModalFrame({ title, description, onClose, children }) {
           <button
             type="button"
             onClick={onClose}
-            className="rounded-2xl border border-slate-200 p-2 text-slate-500 transition hover:bg-slate-50"
+            className="ds-button-ghost rounded-2xl p-2 text-slate-500"
           >
             <X className="h-4 w-4" />
           </button>
@@ -167,14 +166,14 @@ export function ScheduleFollowUpModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+            className="ds-button-secondary"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={submitting}
-            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+            className="ds-button-primary disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting ? 'Saving...' : 'Schedule Follow-up'}
           </button>
@@ -339,14 +338,14 @@ export function CompleteFollowUpModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+            className="ds-button-secondary"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={submitting}
-            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+            className="ds-button-primary disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting ? 'Saving...' : 'Complete Follow-up'}
           </button>

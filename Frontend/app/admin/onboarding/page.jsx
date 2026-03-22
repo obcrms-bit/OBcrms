@@ -158,7 +158,7 @@ export default function SuperAdminOnboardingPage() {
     try {
       const response = await superAdminAPI.createTenant(form);
       const tenantId = response.data?.data?.tenant?.id;
-      router.push(tenantId ? `/admin/tenants/${tenantId}` : '/admin/tenants');
+      router.push(tenantId ? `/platform/tenants/${tenantId}` : '/platform/tenants');
     } catch (requestError) {
       setError(
         requestError?.response?.data?.message ||

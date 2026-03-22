@@ -75,7 +75,9 @@ export default function SuperAdminTenantsPage() {
     event.preventDefault();
     setSelectedIds([]);
     router.replace(
-      filters.search ? `/admin/tenants?search=${encodeURIComponent(filters.search)}` : '/admin/tenants'
+      filters.search
+        ? `/platform/tenants?search=${encodeURIComponent(filters.search)}`
+        : '/platform/tenants'
     );
     await loadTenants(filters);
   };
@@ -86,7 +88,7 @@ export default function SuperAdminTenantsPage() {
     try {
       const response = await superAdminAPI.impersonateTenant(tenantId);
       await login(response.data?.data);
-      router.push('/dashboard');
+      router.push('/tenant/dashboard');
     } catch (requestError) {
       setActionError(
         requestError?.response?.data?.message ||
@@ -338,7 +340,7 @@ export default function SuperAdminTenantsPage() {
               </div>
               <div className="mt-5 flex flex-wrap gap-2">
                 <Link
-                  href={`/admin/tenants/${tenant.id}`}
+                  href={`/platform/tenants/${tenant.id}`}
                   className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
                 >
                   View
@@ -406,7 +408,7 @@ export default function SuperAdminTenantsPage() {
                   <td className="py-4">
                     <div className="flex flex-wrap gap-2">
                       <Link
-                        href={`/admin/tenants/${tenant.id}`}
+                        href={`/platform/tenants/${tenant.id}`}
                         className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
                       >
                         View

@@ -1,0 +1,67 @@
+const registerRoutes = (app) => {
+  const authRoutes = require('../modules/auth/auth.routes');
+  const dashboardRoutes = require('../modules/dashboard/dashboard.routes');
+  const leadRoutes = require('../modules/leads/leads.routes');
+  const branchRoutes = require('../modules/branches/branches.routes');
+  const notificationRoutes = require('../modules/notifications/notifications.routes');
+
+  const studentRoutes = require('../../routes/student.routes');
+  const applicantRoutes = require('../../routes/applicant.routes');
+  const invoiceRoutes = require('../../routes/invoice.routes');
+  const companyRoutes = require('../../routes/company.routes');
+  const agentRoutes = require('../../routes/agent.routes');
+  const organizationRoutes = require('../../routes/organization.routes');
+  const catalogRoutes = require('../../routes/catalog.routes');
+  const transferRoutes = require('../../routes/transfer.routes');
+  const commissionRoutes = require('../../routes/commission.routes');
+  const reportRoutes = require('../../routes/report.routes');
+  const platformRoutes = require('../../routes/platform.routes');
+  const platformImportRoutes = require('../../routes/platformImport.routes');
+  const intelligenceRoutes = require('../../routes/intelligence.routes');
+  const funnelRoutes = require('../../routes/funnel.routes');
+  const publicRoutes = require('../../routes/public.routes');
+  const superAdminRoutes = require('../../routes/superAdmin.routes');
+  const visaRoutes = require('../../routes/visa.routes');
+  const chatRoutes = require('../../routes/chat.routes');
+  const visaWorkflowRoutes = require('../../routes/visaWorkflow.routes');
+  const visaChecklistRoutes = require('../../routes/visaChecklist.routes');
+  const visaFinancialRoutes = require('../../routes/visaFinancial.routes');
+  const visaInterviewRoutes = require('../../routes/visaInterview.routes');
+  const visaRiskRoutes = require('../../routes/visaRisk.routes');
+  const visaExportRoutes = require('../../routes/visaExport.routes');
+
+  app.use('/api/auth', authRoutes);
+  app.use('/api/students', studentRoutes);
+  app.use('/api/applicants', applicantRoutes);
+  app.use('/api/leads', leadRoutes);
+  app.use('/api/invoices', invoiceRoutes);
+  app.use('/api/company', companyRoutes);
+  app.use('/api/dashboard', dashboardRoutes);
+  app.use('/api/branches', branchRoutes);
+  app.use('/api/agents', agentRoutes);
+  app.use('/api/organization', organizationRoutes);
+  app.use('/api/catalog', catalogRoutes);
+  app.use('/api/transfers', transferRoutes);
+  app.use('/api/commissions', commissionRoutes);
+  app.use('/api/notifications', notificationRoutes);
+  app.use('/api/reports', reportRoutes);
+  app.use('/api/platform', platformRoutes);
+  app.use('/api/super-admin/imports', platformImportRoutes);
+  app.use('/api/intelligence', intelligenceRoutes);
+  app.use('/api/funnel', funnelRoutes);
+  app.use('/api/public', publicRoutes);
+  app.use('/api/super-admin', superAdminRoutes);
+  app.use('/api/visa-applications', visaRoutes);
+  app.use('/api/chat', chatRoutes);
+  app.use('/api/visa-applications/:id/workflow', visaWorkflowRoutes);
+  app.use('/api/visa-applications/:id/checklist', visaChecklistRoutes);
+  app.use('/api/visa-applications/:id/financial', visaFinancialRoutes);
+  app.use('/api/visa-applications/:id/interview', visaInterviewRoutes);
+  app.use('/api/visa-applications/:id/risk', visaRiskRoutes);
+  app.use('/api/visa-applications/:id/export', visaExportRoutes);
+  app.use('/api/visa-rules', visaRoutes);
+};
+
+module.exports = {
+  registerRoutes,
+};

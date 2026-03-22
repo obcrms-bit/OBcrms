@@ -6,17 +6,24 @@ const AUTO_ASSIGNABLE_ROLE_KEYS = new Set([
   'follow_up_team',
   'branch_manager',
   'head_office_admin',
+  'tenant_admin',
+  'branch_admin',
   'application_officer',
 ]);
 
 const LEGACY_ROLE_KEYS = new Set([
   'counselor',
+  'counsellor',
   'manager',
   'admin',
   'super_admin',
+  'super_admin_manager',
   'follow_up_team',
   'branch_manager',
   'head_office_admin',
+  'tenant_admin',
+  'branch_admin',
+  'operations',
 ]);
 
 const normalizeCountryList = (countries = []) =>

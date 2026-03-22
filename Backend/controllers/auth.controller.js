@@ -4,7 +4,10 @@ const User = require('../models/User');
 const Company = require('../models/Company');
 const Branch = require('../models/Branch');
 const { sendSuccess, sendError } = require('../utils/responseHandler');
-const { buildEffectiveAccess } = require('../services/accessControl.service');
+const {
+  serializeAuthUser,
+  serializeCompactUser,
+} = require('../src/modules/auth/auth.presenter');
 const {
   ensureCompanySaaSSetup,
   getDefaultRoleKey,
@@ -16,42 +19,6 @@ if (!JWT_SECRET) {
   process.exit(1);
 }
 const TOKEN_EXPIRES = '7d';
-
-const serializeAuthUser = async (user, company = null) => {
-  const branch = user.branchId
-    ? await Branch.findById(user.branchId).select('name code isHeadOffice').lean()
-    : null;
-  const effectiveAccess = await buildEffectiveAccess(user);
-
-  return {
-    id: user._id,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    isSuperAdmin: user.role === 'super_admin',
-    primaryRoleKey: effectiveAccess.roleKey,
-    roleName: effectiveAccess.roleName,
-    companyId: user.companyId,
-    tenantId: user.companyId,
-    branchId: user.branchId || null,
-    branch,
-    countries: Array.isArray(user.countries) ? user.countries : [],
-    isHeadOffice: effectiveAccess.isHeadOffice,
-    managerEnabled: effectiveAccess.managerEnabled,
-    effectivePermissions: effectiveAccess.permissions,
-    fieldAccess: effectiveAccess.fieldAccess,
-    permissionBundles: effectiveAccess.bundles,
-    company: company
-      ? {
-        id: company._id,
-        name: company.name,
-        settings: company.settings,
-        subscription: company.subscription,
-      }
-      : undefined,
-    isActive: user.isActive,
-  };
-};
 
 // ==================== COMPANY REGISTRATION ====================
 // Called when a new company onboards - creates company & first admin
@@ -260,7 +227,7 @@ exports.login = async (req, res) => {
       return sendError(res, 401, 'Company is inactive');
     }
 
-    if (!company.isActive && user.role !== 'super_admin') {
+    if (!company.isActive && !['super_admin', 'super_admin_manager'].includes(user.role)) {
       return sendError(res, 401, 'Company is inactive');
     }
 
@@ -319,18 +286,15 @@ exports.getMe = async (req, res) => {
       return sendError(res, 401, 'Authentication required');
     }
 
-    await ensureCompanySaaSSetup(req.companyId);
-    const company = await Company.findById(req.companyId);
-    const user = await User.findById(req.user._id).select('-password');
-    if (!user || !company) {
+    if (!req.user.isActive || !req.company) {
       return sendError(res, 404, 'User not found');
     }
 
-    if (!user.isActive) {
-      return sendError(res, 401, 'User account is inactive');
-    }
-
-    const serializedUser = await serializeAuthUser(user, company);
+    const serializedUser = await serializeAuthUser(req.user, req.company, {
+      branch: req.user.branchId,
+      effectiveAccess: req.user.effectiveAccess,
+    });
+    res.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=60');
     sendSuccess(res, 200, 'User profile retrieved', serializedUser);
   } catch (error) {
     sendError(res, 500, 'Failed to get profile', error.message);
@@ -341,6 +305,7 @@ exports.getMe = async (req, res) => {
 // Supports assignment dropdowns and internal staff directories
 exports.getCompanyUsers = async (req, res) => {
   try {
+    const isCompactView = String(req.query.compact || '').toLowerCase() === 'dashboard';
     const query = {
       companyId: req.companyId,
       isActive: true,
@@ -356,14 +321,24 @@ exports.getCompanyUsers = async (req, res) => {
 
     const users = await User.find(query)
       .select(
-        'name email role primaryRoleKey branchId avatar jobTitle department isOnline lastSeen isHeadOffice managerEnabled countries'
+        isCompactView
+          ? 'name email role primaryRoleKey branchId avatar jobTitle department isOnline lastSeen isHeadOffice managerEnabled countries createdAt'
+          : 'name email role primaryRoleKey branchId avatar jobTitle department isOnline lastSeen isHeadOffice managerEnabled countries permissionBundleIds roleId permissions fieldAccessOverrides updatedAt'
       )
       .populate('branchId', 'name code isHeadOffice')
-      .sort({ name: 1 });
+      .sort({ name: 1 })
+      .lean();
+
+    if (isCompactView) {
+      res.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=60');
+      return sendSuccess(res, 200, 'Company users retrieved', {
+        users: users.map((user) => serializeCompactUser(user)),
+      });
+    }
 
     const enrichedUsers = await Promise.all(
       users.map(async (user) => ({
-        ...(await serializeAuthUser(user)),
+        ...(await serializeAuthUser(user, null, { branch: user.branchId })),
       }))
     );
 
