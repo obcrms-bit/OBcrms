@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import SuperAdminShell from '@/components/admin/super-admin-shell';
 
 export default function AdminLayout({
@@ -5,5 +6,9 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <SuperAdminShell>{children}</SuperAdminShell>;
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-950 flex items-center justify-center text-white">Loading Admin...</div>}>
+      <SuperAdminShell>{children}</SuperAdminShell>
+    </Suspense>
+  );
 }
