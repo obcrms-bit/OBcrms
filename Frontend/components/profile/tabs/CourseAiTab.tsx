@@ -64,7 +64,7 @@ const CourseAiTab: React.FC<CourseAiTabProps> = ({ clientId, clientType, profile
             Course AI Recommendations
           </h2>
           <p className="text-sm text-gray-600 mt-1 max-w-2xl">
-            AI-powered course matching based on the client's academic profile, test scores, and career interests.
+            AI-powered course matching based on the client&apos;s academic profile, test scores, and career interests.
           </p>
         </div>
         <button 
