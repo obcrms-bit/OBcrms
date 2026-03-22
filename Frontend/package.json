@@ -45,7 +45,7 @@
     "qa:smoke": "node ./scripts/qa-smoke-check.mjs"
   },
   "engines": {
-    "node": ">=18.18.0"
+    "node": "20.x"
   },
   "browserslist": {
     "production": [
