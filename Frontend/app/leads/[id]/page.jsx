@@ -22,6 +22,7 @@ import {
   formatDate,
   formatDateTime,
 } from '@/components/app/shared';
+import ClientProfile from '@/components/profile/ClientProfile';
 import {
   CompleteFollowUpModal,
   ScheduleFollowUpModal,
@@ -562,6 +563,7 @@ export default function LeadDetailPage() {
                 ['timeline', 'Timeline'],
                 ['notes', 'Notes'],
                 ['followups', 'Follow-ups'],
+                ['v2-profile', '🔍 360 Workspace (V2)'],
               ].map(([tabKey, label]) => (
                 <button
                   key={tabKey}
@@ -680,6 +682,12 @@ export default function LeadDetailPage() {
                     )}
                   </div>
                 </section>
+              </div>
+            ) : null}
+
+            {activeTab === 'v2-profile' ? (
+              <div className="space-y-6 animate-in fade-in duration-300">
+                <ClientProfile id={leadId} type="lead" />
               </div>
             ) : null}
 
