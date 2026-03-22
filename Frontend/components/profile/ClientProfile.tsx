@@ -6,6 +6,11 @@ import CourseAiTab from '@/components/profile/tabs/CourseAiTab';
 import ActivityLogTab from '@/components/profile/tabs/ActivityLogTab';
 import VisitsCallsTab from '@/components/profile/tabs/VisitsCallsTab';
 import NotesSection from '@/components/profile/tabs/NotesSection';
+import FollowUpTab from '@/components/profile/tabs/FollowUpTab';
+import ClassTestTab from '@/components/profile/tabs/ClassTestTab';
+import PaymentTab from '@/components/profile/tabs/PaymentTab';
+import DocumentsTab from '@/components/profile/tabs/DocumentsTab';
+import ApplicationTab from '@/components/profile/tabs/ApplicationTab';
 import { getFullProfile } from '@/lib/api/profile';
 
 interface ClientProfileProps {
@@ -60,6 +65,16 @@ const ClientProfile: React.FC<ClientProfileProps> = ({ id, type }) => {
         return <VisitsCallsTab visits={profileData.officeVisits} calls={profileData.callLogs} clientId={id} clientType={type} />;
       case 'Notes':
         return <NotesSection notes={profileData.notes} clientId={id} clientType={type} />;
+      case 'Follow-up':
+        return <FollowUpTab followUps={profileData.followUps || []} />;
+      case 'Class / Test':
+        return <ClassTestTab tests={profileData.testScores || []} />;
+      case 'Payment':
+        return <PaymentTab payments={profileData.payments || []} />;
+      case 'Documents':
+        return <DocumentsTab documents={profileData.documents || []} />;
+      case 'Application':
+        return <ApplicationTab applications={profileData.applications || []} />;
       default:
         return <div className="p-8 text-gray-500 text-center bg-white rounded-lg shadow-sm border border-gray-100">Module coming soon...</div>;
     }
@@ -67,7 +82,7 @@ const ClientProfile: React.FC<ClientProfileProps> = ({ id, type }) => {
 
   return (
     <div className="w-full max-w-7xl mx-auto p-4 space-y-6">
-      <ProfileHeader profile={profileData.profile} type={type} />
+      <ProfileHeader profile={profileData.profile} type={type} clientId={id} />
       
       <div className="flex flex-col md:flex-row gap-6">
         <div className="w-full md:w-64 shrink-0 flex flex-col gap-4">

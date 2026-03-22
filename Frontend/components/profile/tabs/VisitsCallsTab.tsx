@@ -11,6 +11,48 @@ interface VisitsCallsTabProps {
 const VisitsCallsTab: React.FC<VisitsCallsTabProps> = ({ visits, calls, clientId, clientType }) => {
   const [activeSubTab, setActiveSubTab] = useState<'Visits' | 'Calls'>('Visits');
   const [showForm, setShowForm] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const [visitForm, setVisitForm] = useState({
+    visitDate: '',
+    branch: '',
+    visitOutcome: '',
+    notes: '',
+    nextAction: '',
+  });
+
+  const [callForm, setCallForm] = useState({
+    type: 'Incoming',
+    callDate: '',
+    duration: '',
+    outcome: '',
+    notes: '',
+    followUpLinked: false,
+  });
+
+  const handleSubmit = async () => {
+    try {
+      setSubmitting(true);
+      if (activeSubTab === 'Visits') {
+        await addOfficeVisit(clientId, clientType, {
+          ...visitForm,
+          visitDate: visitForm.visitDate ? new Date(visitForm.visitDate) : new Date(),
+        });
+        setVisitForm({ visitDate: '', branch: '', visitOutcome: '', notes: '', nextAction: '' });
+      } else {
+        await addCallLog(clientId, clientType, {
+          ...callForm,
+          callDate: callForm.callDate ? new Date(callForm.callDate) : new Date(),
+        });
+        setCallForm({ type: 'Incoming', callDate: '', duration: '', outcome: '', notes: '', followUpLinked: false });
+      }
+      setShowForm(false);
+    } catch (error) {
+      console.error('Error logging interaction', error);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm">
@@ -46,6 +88,141 @@ const VisitsCallsTab: React.FC<VisitsCallsTabProps> = ({ visits, calls, clientId
             Log {activeSubTab === 'Visits' ? 'Visit' : 'Call'}
           </button>
         </div>
+
+        {showForm && (
+          <div className="mb-6 rounded-lg border border-gray-100 bg-gray-50 p-4 space-y-4">
+            {activeSubTab === 'Visits' ? (
+              <div className="grid md:grid-cols-2 gap-4">
+                <label className="text-sm text-gray-700">
+                  Visit Date
+                  <input
+                    type="datetime-local"
+                    value={visitForm.visitDate}
+                    onChange={(e) => setVisitForm({ ...visitForm, visitDate: e.target.value })}
+                    className="mt-1 w-full rounded-lg border border-gray-200 p-2 text-sm"
+                  />
+                </label>
+                <label className="text-sm text-gray-700">
+                  Branch
+                  <input
+                    type="text"
+                    value={visitForm.branch}
+                    onChange={(e) => setVisitForm({ ...visitForm, branch: e.target.value })}
+                    className="mt-1 w-full rounded-lg border border-gray-200 p-2 text-sm"
+                    placeholder="e.g., Main Branch"
+                  />
+                </label>
+                <label className="text-sm text-gray-700">
+                  Outcome
+                  <input
+                    type="text"
+                    value={visitForm.visitOutcome}
+                    onChange={(e) => setVisitForm({ ...visitForm, visitOutcome: e.target.value })}
+                    className="mt-1 w-full rounded-lg border border-gray-200 p-2 text-sm"
+                    placeholder="Counselled / Pending Docs / Closed"
+                  />
+                </label>
+                <label className="text-sm text-gray-700">
+                  Next Action
+                  <input
+                    type="text"
+                    value={visitForm.nextAction}
+                    onChange={(e) => setVisitForm({ ...visitForm, nextAction: e.target.value })}
+                    className="mt-1 w-full rounded-lg border border-gray-200 p-2 text-sm"
+                    placeholder="Schedule IELTS, collect docs..."
+                  />
+                </label>
+                <label className="md:col-span-2 text-sm text-gray-700">
+                  Notes
+                  <textarea
+                    value={visitForm.notes}
+                    onChange={(e) => setVisitForm({ ...visitForm, notes: e.target.value })}
+                    className="mt-1 w-full rounded-lg border border-gray-200 p-2 text-sm"
+                    rows={3}
+                    placeholder="Key discussion points"
+                  />
+                </label>
+              </div>
+            ) : (
+              <div className="grid md:grid-cols-2 gap-4">
+                <label className="text-sm text-gray-700">
+                  Call Date
+                  <input
+                    type="datetime-local"
+                    value={callForm.callDate}
+                    onChange={(e) => setCallForm({ ...callForm, callDate: e.target.value })}
+                    className="mt-1 w-full rounded-lg border border-gray-200 p-2 text-sm"
+                  />
+                </label>
+                <label className="text-sm text-gray-700">
+                  Type
+                  <select
+                    value={callForm.type}
+                    onChange={(e) => setCallForm({ ...callForm, type: e.target.value as 'Incoming' | 'Outgoing' })}
+                    className="mt-1 w-full rounded-lg border border-gray-200 p-2 text-sm"
+                  >
+                    <option>Incoming</option>
+                    <option>Outgoing</option>
+                  </select>
+                </label>
+                <label className="text-sm text-gray-700">
+                  Duration
+                  <input
+                    type="text"
+                    value={callForm.duration}
+                    onChange={(e) => setCallForm({ ...callForm, duration: e.target.value })}
+                    className="mt-1 w-full rounded-lg border border-gray-200 p-2 text-sm"
+                    placeholder="e.g., 10 mins"
+                  />
+                </label>
+                <label className="text-sm text-gray-700">
+                  Outcome
+                  <input
+                    type="text"
+                    value={callForm.outcome}
+                    onChange={(e) => setCallForm({ ...callForm, outcome: e.target.value })}
+                    className="mt-1 w-full rounded-lg border border-gray-200 p-2 text-sm"
+                    placeholder="Interested / Callback / No answer"
+                  />
+                </label>
+                <label className="md:col-span-2 text-sm text-gray-700">
+                  Notes
+                  <textarea
+                    value={callForm.notes}
+                    onChange={(e) => setCallForm({ ...callForm, notes: e.target.value })}
+                    className="mt-1 w-full rounded-lg border border-gray-200 p-2 text-sm"
+                    rows={3}
+                  />
+                </label>
+                <label className="flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={callForm.followUpLinked}
+                    onChange={(e) => setCallForm({ ...callForm, followUpLinked: e.target.checked })}
+                    className="rounded text-blue-600"
+                  />
+                  Link to follow-up
+                </label>
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                onClick={handleSubmit}
+                disabled={submitting}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50"
+              >
+                {submitting ? 'Saving...' : 'Save'}
+              </button>
+              <button
+                onClick={() => setShowForm(false)}
+                className="px-4 py-2 rounded-lg text-sm font-semibold border border-gray-300 text-gray-700 hover:bg-gray-100"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
 
         {activeSubTab === 'Visits' ? (
           visits && visits.length > 0 ? (

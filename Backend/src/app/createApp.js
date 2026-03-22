@@ -56,12 +56,18 @@ function createApp({ nodeEnv = process.env.NODE_ENV || 'development' } = {}) {
   app.get('/health', (req, res) => {
     const mongoose = require('mongoose');
     const isMongoConnected = mongoose.connection.readyState === 1;
+    const isMongoConfigured = Boolean(process.env.MONGO_URI);
 
-    res.status(isMongoConnected ? 200 : 503).json({
-      status: isMongoConnected ? 'healthy' : 'degraded',
+    const statusCode = !isMongoConfigured ? 200 : isMongoConnected ? 200 : 503;
+
+    res.status(statusCode).json({
+      status: !isMongoConfigured ? 'warning' : isMongoConnected ? 'healthy' : 'degraded',
       uptime: process.uptime(),
       timestamp: new Date().toISOString(),
-      mongo: isMongoConnected ? 'connected' : 'disconnected',
+      mongo: !isMongoConfigured ? 'not_configured' : isMongoConnected ? 'connected' : 'disconnected',
+      note: !isMongoConfigured
+        ? 'MONGO_URI not set; skipping Mongo connection for health check.'
+        : undefined,
     });
   });
 

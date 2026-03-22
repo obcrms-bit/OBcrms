@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js",
+    "build": "node -e \"console.log('Backend build: nothing to compile')\"",
     "seed": "node seeds/seed.js",
     "bootstrap:super-admin": "node scripts/bootstrap-super-admin.js",
     "intelligence:smoke": "node scripts/validate-intelligence-workspace.js",

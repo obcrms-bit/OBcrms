@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { generateCourseRecommendations, getCourseRecommendations, toggleCourseShortlist } from '@/lib/api/profile';
+import { useAuth } from '@/context/AuthContext';
 
 interface CourseAiTabProps {
   clientId: string;
@@ -8,9 +9,17 @@ interface CourseAiTabProps {
 }
 
 const CourseAiTab: React.FC<CourseAiTabProps> = ({ clientId, clientType, profileData }) => {
+  const { user } = useAuth();
   const [recommendations, setRecommendations] = useState<any[]>(profileData.courseRecommendations || []);
   const [loading, setLoading] = useState(false);
   const [activeFilter, setActiveFilter] = useState('All');
+  const [countryFilter, setCountryFilter] = useState<string>('All');
+  const [levelFilter, setLevelFilter] = useState<string>('All');
+  const [fieldFilter, setFieldFilter] = useState<string>('All');
+  const [intakeFilter, setIntakeFilter] = useState<string>('All');
+  const [eligibleOnly, setEligibleOnly] = useState(false);
+
+  const canGenerate = ['TENANT_ADMIN', 'BRANCH_ADMIN', 'COUNSELLOR'].includes(user?.role);
 
   const handleGenerate = async () => {
     try {
@@ -47,12 +56,43 @@ const CourseAiTab: React.FC<CourseAiTabProps> = ({ clientId, clientType, profile
     }
   };
 
-  const filteredRecs = recommendations.filter(r => {
-    if (activeFilter === 'All') return true;
-    if (activeFilter === 'Shortlisted') return r.isShortlisted;
-    if (activeFilter === 'Eligible Only') return r.eligibilityStatus === 'Eligible';
-    return true;
-  });
+  useEffect(() => {
+    const fetch = async () => {
+      if (profileData.courseRecommendations?.length) return;
+      try {
+        const res = await getCourseRecommendations(clientId, clientType);
+        if (res.success) setRecommendations(res.data);
+      } catch (error) {
+        console.error('Failed to fetch recommendations', error);
+      }
+    };
+    fetch();
+  }, [clientId, clientType, profileData.courseRecommendations]);
+
+  const filteredRecs = useMemo(
+    () =>
+      recommendations.filter((r) => {
+        if (activeFilter === 'Shortlisted' && !r.isShortlisted) return false;
+        if (eligibleOnly && r.eligibilityStatus !== 'Eligible') return false;
+        if (countryFilter !== 'All' && r.courseId?.country !== countryFilter) return false;
+        if (levelFilter !== 'All' && r.courseId?.level !== levelFilter) return false;
+        if (fieldFilter !== 'All' && r.courseId?.field !== fieldFilter) return false;
+        if (intakeFilter !== 'All' && !(r.courseId?.intake || []).includes(intakeFilter)) return false;
+        return true;
+      }),
+    [recommendations, activeFilter, eligibleOnly, countryFilter, levelFilter, fieldFilter, intakeFilter]
+  );
+
+  const countries = Array.from(new Set(recommendations.map((r) => r.courseId?.country).filter(Boolean)));
+  const levels = Array.from(new Set(recommendations.map((r) => r.courseId?.level).filter(Boolean)));
+  const fields = Array.from(new Set(recommendations.map((r) => r.courseId?.field).filter(Boolean)));
+  const intakes = Array.from(
+    new Set(
+      recommendations
+        .flatMap((r) => r.courseId?.intake || [])
+        .filter(Boolean)
+    )
+  );
 
   return (
     <div className="space-y-6">
@@ -64,13 +104,14 @@ const CourseAiTab: React.FC<CourseAiTabProps> = ({ clientId, clientType, profile
             Course AI Recommendations
           </h2>
           <p className="text-sm text-gray-600 mt-1 max-w-2xl">
-            AI-powered course matching based on the client&apos;s academic profile, test scores, and career interests.
+            AI-powered course matching based on academic profile, test scores, career interests, and eligibility rules.
           </p>
         </div>
         <button 
           onClick={handleGenerate}
-          disabled={loading}
+          disabled={loading || !canGenerate}
           className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-5 py-2.5 rounded-lg font-medium shadow-md transition-all flex items-center gap-2"
+          title={canGenerate ? '' : 'You do not have permission to run Course AI'}
         >
           {loading ? (
             <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
@@ -79,6 +120,40 @@ const CourseAiTab: React.FC<CourseAiTabProps> = ({ clientId, clientType, profile
           )}
           {loading ? 'Analyzing Profile...' : 'Run AI Match'}
         </button>
+      </div>
+
+      {/* Snapshot + warnings */}
+      <div className="grid md:grid-cols-3 gap-4">
+        <div className="bg-white border border-gray-100 rounded-xl p-4">
+          <h4 className="text-sm font-semibold text-gray-700 mb-2">Academic Snapshot</h4>
+          <p className="text-sm text-gray-600">Level: <span className="font-semibold">{profileData.academicProfile?.qualificationLevel || 'N/A'}</span></p>
+          <p className="text-sm text-gray-600">Score: <span className="font-semibold">{profileData.academicProfile?.academicScore || 'N/A'}</span> {profileData.academicProfile?.gradingType}</p>
+          <p className="text-sm text-gray-600">Gap/Backlogs: {profileData.academicProfile?.studyGap || 0} yrs / {profileData.academicProfile?.backlogCount || 0}</p>
+        </div>
+        <div className="bg-white border border-gray-100 rounded-xl p-4">
+          <h4 className="text-sm font-semibold text-gray-700 mb-2">Tests</h4>
+          {profileData.testScores?.length ? (
+            <div className="flex flex-wrap gap-2">
+              {profileData.testScores.map((t: any) => (
+                <span key={t._id || t.testType} className="px-2 py-1 rounded-full text-xs bg-purple-50 text-purple-700 border border-purple-100">
+                  {t.testType}: {t.overallScore}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500">No tests recorded.</p>
+          )}
+        </div>
+        <div className="bg-white border border-gray-100 rounded-xl p-4">
+          <h4 className="text-sm font-semibold text-gray-700 mb-2">Career Intent</h4>
+          <p className="text-sm text-gray-600">Level: {profileData.careerInterest?.desiredLevel || 'N/A'}</p>
+          <p className="text-sm text-gray-600">Countries: {(profileData.careerInterest?.preferredCountries || []).join(', ') || 'N/A'}</p>
+          <p className="text-sm text-gray-600">Programs: {(profileData.careerInterest?.targetPrograms || []).join(', ') || 'N/A'}</p>
+        </div>
+      </div>
+
+      <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg p-3 text-sm">
+        {profileData.testScores?.length ? 'Recommendations consider language cut-offs and eligibility rules.' : 'Warning: No test scores found; recommendations may be downgraded.'}
       </div>
 
       {/* Filters */}
@@ -94,6 +169,28 @@ const CourseAiTab: React.FC<CourseAiTabProps> = ({ clientId, clientType, profile
             {filter}
           </button>
         ))}
+      </div>
+      <div className="grid md:grid-cols-4 gap-3">
+        <select className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm" value={countryFilter} onChange={(e) => setCountryFilter(e.target.value)}>
+          <option value="All">All Countries</option>
+          {countries.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm" value={levelFilter} onChange={(e) => setLevelFilter(e.target.value)}>
+          <option value="All">All Levels</option>
+          {levels.map((l) => <option key={l} value={l}>{l}</option>)}
+        </select>
+        <select className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm" value={fieldFilter} onChange={(e) => setFieldFilter(e.target.value)}>
+          <option value="All">All Fields</option>
+          {fields.map((f) => <option key={f} value={f}>{f}</option>)}
+        </select>
+        <select className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-sm" value={intakeFilter} onChange={(e) => setIntakeFilter(e.target.value)}>
+          <option value="All">All Intakes</option>
+          {intakes.map((i) => <option key={i} value={i}>{i}</option>)}
+        </select>
+        <label className="flex items-center gap-2 text-sm text-gray-700">
+          <input type="checkbox" checked={eligibleOnly} onChange={(e) => setEligibleOnly(e.target.checked)} className="rounded text-blue-600" />
+          Eligible only
+        </label>
       </div>
 
       {/* Results */}
@@ -111,7 +208,7 @@ const CourseAiTab: React.FC<CourseAiTabProps> = ({ clientId, clientType, profile
                  <div className="flex items-start justify-between">
                     <div>
                       <h3 className="text-lg font-bold text-gray-900">{rec.courseId?.courseName || 'Unknown Course'}</h3>
-                      <p className="text-gray-500 text-sm">{rec.courseId?.institutionName} • {rec.courseId?.country}</p>
+                      <p className="text-gray-500 text-sm">{rec.courseId?.institutionName} / {rec.courseId?.country}</p>
                     </div>
                     <span className={`px-3 py-1 text-xs font-bold rounded-full border ${getBadgeColor(rec.recommendationType)}`}>
                       {rec.recommendationType}

@@ -93,7 +93,7 @@ export default function LeadDetailPage() {
   const [branches, setBranches] = useState([]);
   const [workflow, setWorkflow] = useState(null);
   const [workflowStages, setWorkflowStages] = useState([]);
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('v2-profile');
   const [actionLoading, setActionLoading] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState('');
   const [selectedCounsellorId, setSelectedCounsellorId] = useState('');
@@ -558,12 +558,12 @@ export default function LeadDetailPage() {
           <section className="space-y-6">
             <div className="flex flex-wrap gap-2">
               {[
+                ['v2-profile', '360 Workspace'],
                 ['overview', 'Overview'],
                 ['collaboration', 'Collaboration'],
                 ['timeline', 'Timeline'],
                 ['notes', 'Notes'],
                 ['followups', 'Follow-ups'],
-                ['v2-profile', '🔍 360 Workspace (V2)'],
               ].map(([tabKey, label]) => (
                 <button
                   key={tabKey}

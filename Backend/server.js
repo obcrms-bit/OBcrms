@@ -43,6 +43,7 @@ const server = app.listen(PORT, () => {
 const io = initSocket(server);
 
 let isShuttingDown = false;
+const isMongoConfigured = Boolean(process.env.MONGO_URI);
 let isMongoConnecting = false;
 let mongoRetryHandle = null;
 let reminderSchedulerStarted = false;
@@ -84,6 +85,11 @@ const scheduleMongoReconnect = () => {
 };
 
 const connectMongo = async () => {
+  if (!isMongoConfigured) {
+    console.warn('MONGO_URI not set; skipping MongoDB connection (health will show warning).');
+    return;
+  }
+
   if (isShuttingDown || isMongoConnecting || mongoose.connection.readyState === 1) {
     return;
   }

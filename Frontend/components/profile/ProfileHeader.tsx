@@ -1,16 +1,34 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { addProfileNote } from '@/lib/api/profile';
 
 interface ProfileHeaderProps {
   profile: any;
   type: 'lead' | 'student';
+  clientId: string;
 }
 
-const ProfileHeader: React.FC<ProfileHeaderProps> = ({ profile, type }) => {
+const ProfileHeader: React.FC<ProfileHeaderProps> = ({ profile, type, clientId }) => {
+  const [quickNote, setQuickNote] = useState('');
+  const [saving, setSaving] = useState(false);
+
   const getInitials = (name: string) => {
     if (!name) return 'UN';
     const parts = name.split(' ');
     if (parts.length > 1) return (parts[0][0] + parts[1][0]).toUpperCase();
     return parts[0].substring(0, 2).toUpperCase();
+  };
+
+  const handleQuickNote = async () => {
+    if (!quickNote.trim()) return;
+    try {
+      setSaving(true);
+      await addProfileNote(clientId, type, quickNote.trim(), true);
+      setQuickNote('');
+    } catch (err) {
+      console.error('Quick note failed', err);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -57,9 +75,15 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({ profile, type }) => {
             <input 
               type="text" 
               placeholder="Add a quick note..." 
+              value={quickNote}
+              onChange={(e) => setQuickNote(e.target.value)}
               className="bg-transparent border-none text-white placeholder-indigo-300 focus:outline-none focus:ring-0 px-3 py-1 w-full text-sm"
             />
-            <button className="bg-indigo-500 hover:bg-indigo-400 text-white rounded p-1.5 transition-colors">
+            <button
+              onClick={handleQuickNote}
+              disabled={saving}
+              className="bg-indigo-500 hover:bg-indigo-400 text-white rounded p-1.5 transition-colors disabled:opacity-50"
+            >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
             </button>
           </div>
