@@ -29,6 +29,8 @@ const registerRoutes = (app) => {
   const visaInterviewRoutes = require('../../routes/visaInterview.routes');
   const visaRiskRoutes = require('../../routes/visaRisk.routes');
   const visaExportRoutes = require('../../routes/visaExport.routes');
+  const clientProfileRoutes = require('../../routes/clientProfile.routes');
+  const courseAiRoutes = require('../../routes/courseAi.routes');
 
   app.use('/api/auth', authRoutes);
   app.use('/api/students', studentRoutes);
@@ -60,6 +62,8 @@ const registerRoutes = (app) => {
   app.use('/api/visa-applications/:id/risk', visaRiskRoutes);
   app.use('/api/visa-applications/:id/export', visaExportRoutes);
   app.use('/api/visa-rules', visaRoutes);
+  app.use('/api/client-profile', clientProfileRoutes);
+  app.use('/api/course-ai', courseAiRoutes);
 };
 
 module.exports = {
