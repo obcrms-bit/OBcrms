@@ -148,3 +148,5 @@ Backend/server_log.txt
 Backend/test_report.json
 Backend/final-test-report.json
 integration-test-results.json
+
+.vercel

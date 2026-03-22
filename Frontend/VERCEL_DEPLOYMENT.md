@@ -7,7 +7,7 @@ Deploy the `Frontend` directory as the Vercel project root.
 - Framework Preset: `Next.js`
 - Root Directory: `Frontend`
 - Node.js Version: `20.x`
-- Install Command: `npm ci`
+- Install Command: `npm ci --include=dev`
 - Build Command: `npm run build`
 - Output Directory: leave blank
 
