@@ -26,17 +26,27 @@ import {
   Sparkles,
   SunMedium,
   Users,
+  Workflow,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { cn } from '@/lib/utils';
 import { getInitials } from '@/components/app/shared';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   getDefaultWorkspacePath,
   getWorkspaceLabel,
   isPlatformUser,
 } from '@/src/apps/shared/routing';
 import { superAdminAPI } from '@/src/services/api';
+import { hasPermission, normalizeRoleKey } from '@/src/services/access';
 
 const NAV_ITEMS = [
   {
@@ -62,6 +72,14 @@ const NAV_ITEMS = [
     label: 'Import Center',
     icon: FileCog,
     basePath: '/platform/import',
+  },
+  {
+    href: '/platform/ai-insights?focus=funnel',
+    label: 'Funnel Monitoring',
+    icon: Workflow,
+    basePath: '/platform/ai-insights',
+    queryKey: 'focus',
+    queryValue: 'funnel',
   },
   {
     href: '/platform/billing',
@@ -94,6 +112,14 @@ const NAV_ITEMS = [
     icon: Palette,
     basePath: '/platform/settings',
     panel: 'branding',
+  },
+  {
+    href: '/platform/ai-insights?focus=signals',
+    label: 'AI Insights',
+    icon: Sparkles,
+    basePath: '/platform/ai-insights',
+    queryKey: 'focus',
+    queryValue: 'signals',
   },
   {
     href: '/platform/settings',
@@ -213,8 +239,26 @@ export default function SuperAdminShell({ children }) {
     };
   }, [isAuthenticated, isLoading, user]);
 
-  const navItems = useMemo(() => NAV_ITEMS, []);
+  const roleKey = normalizeRoleKey(user);
+  const canManagePlatform =
+    roleKey === 'super_admin' || hasPermission(user, 'platformcontrol', 'manage');
+  const userRoleLabel =
+    roleKey === 'super_admin'
+      ? 'Owner'
+      : roleKey === 'super_admin_manager'
+        ? 'Platform Manager'
+        : 'Platform Team';
+  const navItems = useMemo(
+    () =>
+      NAV_ITEMS.filter((item) =>
+        canManagePlatform
+          ? true
+          : !['Onboarding', 'Import Center', 'White Label', 'Settings'].includes(item.label)
+      ),
+    [canManagePlatform]
+  );
   const currentPanel = searchParams?.get('panel') || '';
+  const currentFocus = searchParams?.get('focus') || '';
 
   const routeMeta = useMemo(() => {
     if (pathname?.startsWith('/platform/tenants')) {
@@ -252,6 +296,20 @@ export default function SuperAdminShell({ children }) {
       };
     }
 
+    if (pathname?.startsWith('/platform/ai-insights') && currentFocus === 'funnel') {
+      return {
+        title: 'Funnel Monitoring',
+        description: 'Platform-level funnel, onboarding, and rollout anomalies across all tenants.',
+      };
+    }
+
+    if (pathname?.startsWith('/platform/ai-insights')) {
+      return {
+        title: 'AI Insights',
+        description: 'Explainable platform signals across onboarding, billing, launch readiness, and tenant health.',
+      };
+    }
+
     if (pathname?.startsWith('/platform/audit')) {
       return {
         title: 'Audit Logs',
@@ -284,7 +342,7 @@ export default function SuperAdminShell({ children }) {
       title: 'Owner Command Center',
       description: 'Centralized visibility and control across every consultancy.',
     };
-  }, [currentPanel, pathname]);
+  }, [currentFocus, currentPanel, pathname]);
 
   const buildPlatformUrl = (updates = {}) => {
     const params = new URLSearchParams(searchParams?.toString() || '');
@@ -466,7 +524,8 @@ export default function SuperAdminShell({ children }) {
               {navItems.map((item) => {
                 const isActive =
                   pathname?.startsWith(item.basePath) &&
-                  (!item.panel || currentPanel === item.panel);
+                  (!item.panel || currentPanel === item.panel) &&
+                  (!item.queryKey || searchParams?.get(item.queryKey) === item.queryValue);
 
                 return (
                   <Link
@@ -608,19 +667,57 @@ export default function SuperAdminShell({ children }) {
                       </span>
                     ) : null}
                   </Link>
-                  <div className="flex items-center gap-3 rounded-[24px] border border-slate-200 bg-white px-3 py-2 dark:border-slate-800 dark:bg-slate-950">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-950 text-sm font-semibold text-white dark:bg-slate-100 dark:text-slate-950">
-                      {getInitials(user?.name)}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-slate-950 dark:text-slate-100">
-                        {user?.name}
-                      </p>
-                      <p className="truncate text-xs text-slate-500 dark:text-slate-400">
-                        Super Admin
-                      </p>
-                    </div>
-                  </div>
+                  {canManagePlatform ? (
+                    <Link
+                      href="/platform/onboarding"
+                      className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-white"
+                    >
+                      <Sparkles className="h-4 w-4" />
+                      Quick Create
+                    </Link>
+                  ) : null}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        className="flex items-center gap-3 rounded-[24px] border border-slate-200 bg-white px-3 py-2 text-left transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-950 dark:hover:bg-slate-900"
+                      >
+                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-950 text-sm font-semibold text-white dark:bg-slate-100 dark:text-slate-950">
+                          {getInitials(user?.name)}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-slate-950 dark:text-slate-100">
+                            {user?.name}
+                          </p>
+                          <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+                            {userRoleLabel}
+                          </p>
+                        </div>
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      <DropdownMenuLabel>{user?.email}</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => router.push('/platform/dashboard')}>
+                        Dashboard
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => router.push('/platform/settings')}>
+                        Settings
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => router.push('/platform/audit')}>
+                        Audit Logs
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => {
+                          logout();
+                          router.replace('/login');
+                        }}
+                      >
+                        Logout
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
 

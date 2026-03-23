@@ -1,11 +1,19 @@
 'use client';
 
+import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { AlertTriangle, ArrowUpRight, Inbox, Loader2 } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowRight,
+  ArrowUpRight,
+  Inbox,
+  Loader2,
+  Sparkles,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatRelativeDate } from '../platform.utils';
 
-type Tone = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
+export type Tone = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
 
 const toneClasses: Record<Tone, string> = {
   success:
@@ -39,10 +47,7 @@ export function PageHeading({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.32, ease: 'easeOut' }}
-      className={cn(
-        surfaceClassName,
-        'relative overflow-hidden px-6 py-7 md:px-8 md:py-8'
-      )}
+      className={cn(surfaceClassName, 'relative overflow-hidden px-6 py-7 md:px-8 md:py-8')}
     >
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.12),transparent_32%),linear-gradient(135deg,rgba(255,255,255,0.98),rgba(248,250,252,0.86))] dark:bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.18),transparent_30%),linear-gradient(135deg,rgba(15,23,42,0.92),rgba(2,6,23,0.86))]" />
       <div className="relative flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
@@ -60,6 +65,64 @@ export function PageHeading({
         {actions ? <div className="flex flex-wrap items-center gap-3">{actions}</div> : null}
       </div>
     </motion.section>
+  );
+}
+
+export function HeroCommandPanel({
+  title,
+  subtitle,
+  eyebrow = 'Super Admin Console',
+  roleLabel,
+  actions,
+  insights,
+}: {
+  title: string;
+  subtitle: string;
+  eyebrow?: string;
+  roleLabel: string;
+  actions?: React.ReactNode;
+  insights: Array<{
+    id: string;
+    label: string;
+    value: string;
+    helper: string;
+    tone?: Tone | 'healthy' | 'watch' | 'critical';
+  }>;
+}) {
+  return (
+    <section className="overflow-hidden rounded-[30px] border border-slate-200/80 bg-[linear-gradient(135deg,#020617_0%,#0f172a_42%,#1e3a8a_100%)] px-6 py-6 text-white shadow-[0_30px_80px_rgba(15,23,42,0.24)]">
+      <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+        <div className="max-w-3xl">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-sky-100">
+              {eyebrow}
+            </span>
+            <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-200">
+              {roleLabel}
+            </span>
+          </div>
+          <h2 className="mt-4 text-[clamp(2rem,1.4rem+1.6vw,3.1rem)] font-semibold tracking-[-0.05em]">
+            {title}
+          </h2>
+          <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-200/80">{subtitle}</p>
+          {actions ? <div className="mt-6 flex flex-wrap gap-3">{actions}</div> : null}
+        </div>
+        <div className="grid w-full gap-3 sm:grid-cols-3 xl:max-w-[560px]">
+          {insights.map((insight) => (
+            <div
+              key={insight.id}
+              className="rounded-[24px] border border-white/10 bg-white/10 px-4 py-4 backdrop-blur"
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-300">
+                {insight.label}
+              </p>
+              <p className="mt-3 text-2xl font-semibold tracking-[-0.04em]">{insight.value}</p>
+              <p className="mt-2 text-sm leading-6 text-slate-300">{insight.helper}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -123,6 +186,18 @@ export function ProgressBar({
   );
 }
 
+type KpiCardProps = {
+  label: string;
+  value: string | number;
+  helper: string;
+  icon: any;
+  tone?: Tone;
+  trailing?: React.ReactNode;
+  trend?: string;
+  href?: string;
+  onClick?: () => void;
+};
+
 export function KpiCard({
   label,
   value,
@@ -130,14 +205,10 @@ export function KpiCard({
   icon: Icon,
   tone = 'neutral',
   trailing,
-}: {
-  label: string;
-  value: string | number;
-  helper: string;
-  icon: any;
-  tone?: Tone;
-  trailing?: React.ReactNode;
-}) {
+  trend,
+  href,
+  onClick,
+}: KpiCardProps) {
   const iconTone =
     tone === 'success'
       ? 'bg-emerald-500/12 text-emerald-600 dark:bg-emerald-500/18 dark:text-emerald-300'
@@ -149,7 +220,7 @@ export function KpiCard({
             ? 'bg-sky-500/12 text-sky-600 dark:bg-sky-500/18 dark:text-sky-300'
             : 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-950';
 
-  return (
+  const content = (
     <motion.article
       whileHover={{ y: -4 }}
       transition={{ duration: 0.18, ease: 'easeOut' }}
@@ -164,6 +235,11 @@ export function KpiCard({
             {value}
           </p>
           <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{helper}</p>
+          {trend ? (
+            <p className="mt-3 text-xs font-semibold uppercase tracking-[0.18em] text-sky-700 dark:text-sky-300">
+              {trend}
+            </p>
+          ) : null}
         </div>
         <div className="flex flex-col items-end gap-3">
           <div className={cn('flex h-12 w-12 items-center justify-center rounded-2xl', iconTone)}>
@@ -174,6 +250,24 @@ export function KpiCard({
       </div>
     </motion.article>
   );
+
+  if (href) {
+    return (
+      <Link href={href} className="block">
+        {content}
+      </Link>
+    );
+  }
+
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className="block w-full text-left">
+        {content}
+      </button>
+    );
+  }
+
+  return content;
 }
 
 export function QuickActionCard({
@@ -213,9 +307,9 @@ export function QuickActionCard({
 
   if (href) {
     return (
-      <a href={href} className="block">
+      <Link href={href} className="block">
         {content}
-      </a>
+      </Link>
     );
   }
 
@@ -223,6 +317,54 @@ export function QuickActionCard({
     <button type="button" onClick={onClick} className="block w-full text-left">
       {content}
     </button>
+  );
+}
+
+export function InsightCard({
+  title,
+  description,
+  severity = 'info',
+  actionLabel,
+  href,
+  meta,
+}: {
+  title: string;
+  description: string;
+  severity?: 'positive' | 'watch' | 'critical' | 'info';
+  actionLabel?: string;
+  href?: string;
+  meta?: string;
+}) {
+  const tone =
+    severity === 'positive'
+      ? toneClasses.success
+      : severity === 'watch'
+        ? toneClasses.warning
+        : severity === 'critical'
+          ? toneClasses.danger
+          : toneClasses.info;
+
+  return (
+    <div className={cn('rounded-[24px] border px-5 py-5', tone)}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="font-semibold">{title}</p>
+          <p className="mt-2 text-sm leading-6 opacity-90">{description}</p>
+        </div>
+        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/60 text-current dark:bg-slate-950/20">
+          <Sparkles className="h-5 w-5" />
+        </div>
+      </div>
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-80">{meta}</p>
+        {href && actionLabel ? (
+          <Link href={href} className="inline-flex items-center gap-2 text-sm font-semibold">
+            {actionLabel}
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -259,7 +401,9 @@ export function ChartCard({
         {badge}
       </div>
       <div className="mt-6">{children}</div>
-      {footer ? <div className="mt-5 border-t border-slate-200/80 pt-4 dark:border-slate-800">{footer}</div> : null}
+      {footer ? (
+        <div className="mt-5 border-t border-slate-200/80 pt-4 dark:border-slate-800">{footer}</div>
+      ) : null}
     </motion.section>
   );
 }

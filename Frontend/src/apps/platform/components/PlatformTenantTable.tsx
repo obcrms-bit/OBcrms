@@ -97,6 +97,9 @@ type PlatformTenantTableProps = {
   onOpenOnboarding: (tenant: PlatformTenantRecord) => void;
   onToggleStatus: (tenant: PlatformTenantRecord) => void;
   onPageChange: (page: number) => void;
+  onOpenTenant?: (tenant: PlatformTenantRecord) => void;
+  onOpenBilling?: (tenant: PlatformTenantRecord) => void;
+  onOpenAudit?: (tenant: PlatformTenantRecord) => void;
 };
 
 const headerButtonClassName =
@@ -118,6 +121,9 @@ export default function PlatformTenantTable({
   onOpenOnboarding,
   onToggleStatus,
   onPageChange,
+  onOpenTenant,
+  onOpenBilling,
+  onOpenAudit,
 }: PlatformTenantTableProps) {
   const allPageSelected = items.length > 0 && items.every((item) => selectedIds.includes(item.id));
 
@@ -255,7 +261,7 @@ export default function PlatformTenantTable({
                   }).format(new Date(tenant.createdAt))}
                 </td>
                 <td className="px-4 py-4 align-top">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
                       onClick={() => onView(tenant)}
@@ -270,13 +276,40 @@ export default function PlatformTenantTable({
                     >
                       Edit
                     </button>
+                    {onOpenTenant ? (
+                      <button
+                        type="button"
+                        onClick={() => onOpenTenant(tenant)}
+                        className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-900"
+                      >
+                        Open Tenant
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       onClick={() => onOpenOnboarding(tenant)}
                       className="rounded-2xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-700 transition hover:bg-sky-100 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-300 dark:hover:bg-sky-500/20"
                     >
-                      Onboarding
+                      Resume Onboarding
                     </button>
+                    {onOpenBilling ? (
+                      <button
+                        type="button"
+                        onClick={() => onOpenBilling(tenant)}
+                        className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-900"
+                      >
+                        Billing
+                      </button>
+                    ) : null}
+                    {onOpenAudit ? (
+                      <button
+                        type="button"
+                        onClick={() => onOpenAudit(tenant)}
+                        className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-900"
+                      >
+                        Audit
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       onClick={() => onToggleStatus(tenant)}
@@ -284,12 +317,14 @@ export default function PlatformTenantTable({
                     >
                       {tenant.status === 'suspended' ? 'Activate' : 'Suspend'}
                     </button>
-                    <button
-                      type="button"
-                      className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-900"
-                    >
-                      <MoreHorizontal className="h-4 w-4" />
-                    </button>
+                    {!onOpenBilling && !onOpenAudit ? (
+                      <button
+                        type="button"
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-900"
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                      </button>
+                    ) : null}
                   </div>
                 </td>
               </tr>

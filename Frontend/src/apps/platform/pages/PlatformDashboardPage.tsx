@@ -1,16 +1,19 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
-  ArrowRight,
   Building2,
   CreditCard,
+  Download,
+  FileClock,
   FileUp,
+  Layers3,
   ShieldCheck,
   Sparkles,
+  Users,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import {
@@ -28,35 +31,49 @@ import {
   YAxis,
 } from 'recharts';
 import { useAuth } from '@/context/AuthContext';
+import { superAdminAPI } from '@/src/services/api';
 import { useTenantStore } from '@/src/stores/AppDataStore';
-import { getOwnerSnapshot } from '@/src/modules/owner-control-tower/services/owner-control.service';
-import {
-  buildDashboardModel,
-  buildPlatformTenantDataset,
-  formatRelativeDate,
-  getStatusTone,
-} from '../platform.utils';
-import type { PlatformTenantRecord } from '../platform.types';
 import PlatformTenantDrawer from '../components/PlatformTenantDrawer';
+import PlatformTenantFilterBar from '../components/PlatformTenantFilterBar';
+import PlatformTenantTable from '../components/PlatformTenantTable';
 import {
   ActivityList,
   AttentionPanel,
   ChartCard,
   EmptyResultsState,
+  HeroCommandPanel,
+  InsightCard,
   KpiCard,
   LoadingPanel,
-  PageHeading,
-  QuickActionCard,
   ProgressBar,
+  QuickActionCard,
   StatusBadge,
 } from '../components/platform-ui';
-import { superAdminAPI } from '@/src/services/api';
+import type {
+  PlatformImportBatchRecord,
+  PlatformTenantRecord,
+  SortDirection,
+  TenantFilterState,
+  TenantSortField,
+} from '../platform.types';
+import {
+  DEFAULT_TENANT_FILTERS,
+  buildDashboardModel,
+  buildPlatformCapabilities,
+  buildPlatformTenantDataset,
+  exportTenantRecords,
+  filterTenants,
+  mapImportBatchToRecord,
+  paginateTenants,
+  sortTenants,
+} from '../platform.utils';
 
 const chartPalette = ['#0f172a', '#2563eb', '#14b8a6', '#f59e0b', '#ef4444'];
+const PAGE_SIZE = 8;
 
 export default function PlatformDashboardPage() {
   const router = useRouter();
-  const { login } = useAuth();
+  const { login, user } = useAuth();
   const {
     overview,
     tenants,
@@ -66,20 +83,41 @@ export default function PlatformDashboardPage() {
     loadTenants,
     loadTenantDetail,
   } = useTenantStore();
-  const [ownerSnapshot, setOwnerSnapshot] = useState<any>(null);
+  const [importBatches, setImportBatches] = useState<PlatformImportBatchRecord[]>([]);
+  const [loadingImports, setLoadingImports] = useState(false);
   const [selectedTenant, setSelectedTenant] = useState<PlatformTenantRecord | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerLoading, setDrawerLoading] = useState(false);
   const [tenantDetail, setTenantDetail] = useState<any>(null);
+  const [filters, setFilters] = useState<TenantFilterState>({ ...DEFAULT_TENANT_FILTERS });
+  const [sortField, setSortField] = useState<TenantSortField>('lastActivityAt');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [page, setPage] = useState(1);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  const loadCommandCenter = useCallback(async () => {
+    setLoadingImports(true);
+    await Promise.all([
+      loadOverview().catch(() => null),
+      loadTenants({}).catch(() => null),
+      superAdminAPI
+        .getImportLogs({ limit: 24 })
+        .then((response) => {
+          const batches = response?.data?.data?.batches || [];
+          setImportBatches(batches.map(mapImportBatchToRecord));
+        })
+        .catch(() => {
+          setImportBatches([]);
+        }),
+    ]);
+    setLoadingImports(false);
+  }, [loadOverview, loadTenants]);
 
   useEffect(() => {
-    Promise.all([loadOverview().catch(() => null), loadTenants({}).catch(() => null)]).catch(
-      () => null
-    );
-    getOwnerSnapshot()
-      .then(setOwnerSnapshot)
-      .catch(() => {});
-  }, [loadOverview, loadTenants]);
+    void loadCommandCenter();
+  }, [loadCommandCenter]);
+
+  const capabilities = useMemo(() => buildPlatformCapabilities(user), [user]);
 
   const tenantRecords = useMemo(
     () =>
@@ -91,195 +129,240 @@ export default function PlatformDashboardPage() {
   );
 
   const dashboardModel = useMemo(
-    () => buildDashboardModel(overview, tenantRecords, ownerSnapshot),
-    [overview, ownerSnapshot, tenantRecords]
-  );
-
-  const kpis = useMemo(
-    () => [
-      {
-        label: 'Total tenants',
-        value: dashboardModel.tenants.length,
-        helper: 'All consultancies under platform ownership',
-        icon: Building2,
-        tone: 'neutral' as const,
-      },
-      {
-        label: 'Active tenants',
-        value: dashboardModel.tenants.filter((tenant) => tenant.status === 'active').length,
-        helper: 'Live consultancies in good standing',
-        icon: ShieldCheck,
-        tone: 'success' as const,
-      },
-      {
-        label: 'Onboarding count',
-        value: dashboardModel.tenants.filter((tenant) =>
-          ['trial', 'onboarding'].includes(tenant.status)
-        ).length,
-        helper: 'Still moving through launch setup',
-        icon: Sparkles,
-        tone: 'info' as const,
-      },
-      {
-        label: 'MRR',
-        value: new Intl.NumberFormat('en-US', {
-          style: 'currency',
-          currency: 'USD',
-          maximumFractionDigits: 0,
-        }).format(dashboardModel.totalMrr),
-        helper: 'Estimated recurring platform revenue',
-        icon: CreditCard,
-        tone: 'info' as const,
-      },
-      {
-        label: 'Alerts',
-        value: dashboardModel.attentionItems.length,
-        helper: 'Cross-tenant issues surfaced right now',
-        icon: AlertTriangle,
-        tone: dashboardModel.criticalIssues ? ('danger' as const) : ('warning' as const),
-      },
-    ],
-    [dashboardModel]
-  );
-
-  const priorityTenants = useMemo(
     () =>
-      [...dashboardModel.tenants]
-        .sort((left, right) => {
-          const leftScore =
-            left.attentionLevel === 'critical' ? 3 : left.attentionLevel === 'watch' ? 2 : 1;
-          const rightScore =
-            right.attentionLevel === 'critical' ? 3 : right.attentionLevel === 'watch' ? 2 : 1;
-          if (leftScore !== rightScore) {
-            return rightScore - leftScore;
-          }
-          return left.setupCompletion - right.setupCompletion;
-        })
-        .slice(0, 6),
-    [dashboardModel.tenants]
+      buildDashboardModel({
+        overview,
+        tenants: tenantRecords,
+        importBatches,
+      }),
+    [overview, tenantRecords, importBatches]
   );
 
-  const handleViewTenant = async (tenant: PlatformTenantRecord) => {
-    setSelectedTenant(tenant);
-    setDrawerOpen(true);
-    setTenantDetail(null);
+  const countries = useMemo(
+    () => Array.from(new Set(tenantRecords.map((tenant) => tenant.country))).sort(),
+    [tenantRecords]
+  );
 
-    if (tenant.source !== 'api') {
-      return;
-    }
+  const filteredTenants = useMemo(
+    () => filterTenants(tenantRecords, filters),
+    [filters, tenantRecords]
+  );
 
-    setDrawerLoading(true);
-    try {
-      const detail = await loadTenantDetail(tenant.id);
-      setTenantDetail(detail);
-    } catch (requestError) {
+  const sortedTenants = useMemo(
+    () => sortTenants(filteredTenants, sortField, sortDirection),
+    [filteredTenants, sortDirection, sortField]
+  );
+
+  const pagination = useMemo(
+    () => paginateTenants(sortedTenants, page, PAGE_SIZE),
+    [page, sortedTenants]
+  );
+
+  const selectedImport = useMemo(
+    () =>
+      selectedTenant
+        ? importBatches.find(
+            (batch) =>
+              batch.importedTenantId === selectedTenant.id ||
+              batch.importedTenantName === selectedTenant.name
+          ) || null
+        : null,
+    [importBatches, selectedTenant]
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [filters, sortDirection, sortField]);
+
+  const handleViewTenant = useCallback(
+    async (tenant: PlatformTenantRecord) => {
+      setSelectedTenant(tenant);
+      setDrawerOpen(true);
       setTenantDetail(null);
-    } finally {
-      setDrawerLoading(false);
-    }
-  };
 
-  const handleImpersonateTenant = async () => {
-    if (!selectedTenant || selectedTenant.source !== 'api') {
-      return;
-    }
+      if (tenant.source !== 'api') {
+        return;
+      }
 
-    const response = await superAdminAPI.impersonateTenant(selectedTenant.id);
-    await login(response.data?.data);
-    router.push('/tenant/dashboard');
-  };
+      setDrawerLoading(true);
+      try {
+        const detail = await loadTenantDetail(tenant.id);
+        setTenantDetail(detail);
+      } catch {
+        setTenantDetail(null);
+      } finally {
+        setDrawerLoading(false);
+      }
+    },
+    [loadTenantDetail]
+  );
 
-  if ((loadingOverview || loadingTenants) && !ownerSnapshot && !tenantRecords.length) {
-    return <LoadingPanel label="Loading owner command center..." />;
+  const openTenantWorkspace = useCallback(
+    async (tenant: PlatformTenantRecord) => {
+      if (tenant.source !== 'api' || !capabilities.canImpersonate) {
+        return;
+      }
+
+      const response = await superAdminAPI.impersonateTenant(tenant.id);
+      await login(response.data?.data);
+      router.push('/tenant/dashboard');
+    },
+    [capabilities.canImpersonate, login, router]
+  );
+
+  if ((loadingOverview || loadingTenants || loadingImports) && !tenantRecords.length) {
+    return <LoadingPanel label="Loading super admin command center..." />;
   }
+
+  const kpis = [
+    {
+      label: 'Total Tenants',
+      value: tenantRecords.length,
+      helper: 'All consultancies under platform ownership',
+      icon: Building2,
+      tone: 'neutral' as const,
+      trend: `${dashboardModel.launchReadyTenants} launch ready`,
+      href: '/platform/tenants',
+    },
+    {
+      label: 'Active Tenants',
+      value: dashboardModel.activeTenants,
+      helper: 'Live platform workspaces in good standing',
+      icon: ShieldCheck,
+      tone: 'success' as const,
+      trend: `${dashboardModel.platformHealthScore}/100 platform health`,
+      href: '/platform/tenants',
+    },
+    {
+      label: 'Suspended Tenants',
+      value: dashboardModel.suspendedTenants,
+      helper: 'Currently blocked from tenant access',
+      icon: AlertTriangle,
+      tone: dashboardModel.suspendedTenants ? ('warning' as const) : ('neutral' as const),
+      trend: `${dashboardModel.billingIssues} billing-linked issues`,
+      href: '/platform/alerts',
+    },
+    {
+      label: 'Onboarding In Progress',
+      value: dashboardModel.onboardingInProgress,
+      helper: 'Tenants still moving through setup',
+      icon: Sparkles,
+      tone: 'info' as const,
+      trend: `${dashboardModel.activeImports} active import jobs`,
+      href: '/platform/onboarding',
+    },
+    {
+      label: 'Total Branches',
+      value: overview?.kpis?.totalBranches || 0,
+      helper: 'Visible branch footprint across tenants',
+      icon: Layers3,
+      tone: 'neutral' as const,
+      trend: `${Math.round(
+        (overview?.kpis?.totalBranches || 0) / Math.max(tenantRecords.length, 1)
+      )} avg per tenant`,
+      href: '/platform/tenants',
+    },
+    {
+      label: 'Total Platform Users',
+      value: overview?.kpis?.totalUsers || 0,
+      helper: 'Active users across the portfolio',
+      icon: Users,
+      tone: 'neutral' as const,
+      trend: `${dashboardModel.averageHealthScore}/100 avg health`,
+      href: '/platform/tenants',
+    },
+    {
+      label: 'MRR Visibility',
+      value: new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        maximumFractionDigits: 0,
+      }).format(dashboardModel.totalMrr),
+      helper: 'Estimated recurring revenue by active plan mix',
+      icon: CreditCard,
+      tone: 'info' as const,
+      trend: `${dashboardModel.activeTenants} revenue-contributing tenants`,
+      href: '/platform/billing',
+    },
+    {
+      label: 'Billing Issues',
+      value: dashboardModel.billingIssues,
+      helper: 'Past due, inactive, or cancelled billing states',
+      icon: CreditCard,
+      tone: dashboardModel.billingIssues ? ('danger' as const) : ('success' as const),
+      trend: `${overview?.supportTools?.pastDueTenants || 0} past due`,
+      href: '/platform/billing',
+    },
+    {
+      label: 'Platform Alerts',
+      value: dashboardModel.attentionItems.length,
+      helper: 'Actionable issues surfaced across the platform',
+      icon: AlertTriangle,
+      tone: dashboardModel.criticalIssues ? ('danger' as const) : ('warning' as const),
+      trend: `${dashboardModel.criticalIssues} critical`,
+      href: '/platform/alerts',
+    },
+    {
+      label: 'Active Imports / Jobs',
+      value: dashboardModel.activeImports,
+      helper: 'Tenant setup workbooks currently in flight',
+      icon: FileClock,
+      tone: dashboardModel.activeImports ? ('info' as const) : ('neutral' as const),
+      trend: `${importBatches.filter((batch) => batch.status === 'failed').length} failed`,
+      href: '/platform/import',
+    },
+  ];
 
   return (
     <div className="space-y-8">
-      <PageHeading
-        eyebrow="Owner Command Center"
-        title="Platform control without operational noise"
-        subtitle="Track tenant readiness, revenue posture, billing risk, and rollout confidence from one premium control surface designed for platform ownership."
+      <HeroCommandPanel
+        roleLabel={capabilities.roleLabel}
+        title="Platform-wide tenant monitoring and control"
+        subtitle="Investor-ready command center for platform ownership, onboarding supervision, billing visibility, SLA risk scanning, and explainable operational insight across every tenant."
+        insights={dashboardModel.heroInsights}
         actions={
           <>
-            <Link
-              href="/platform/onboarding"
-              className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-white"
-            >
-              <Sparkles className="h-4 w-4" />
-              Add Tenant
-            </Link>
+            {capabilities.canCreateTenant ? (
+              <Link
+                href="/platform/onboarding"
+                className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-slate-100"
+              >
+                <Sparkles className="h-4 w-4" />
+                Add Tenant
+              </Link>
+            ) : null}
             <Link
               href="/platform/import"
-              className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-900"
+              className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/15"
             >
               <FileUp className="h-4 w-4" />
-              Import File
+              Import Tenant File
+            </Link>
+            <button
+              type="button"
+              onClick={() => exportTenantRecords(sortedTenants.length ? sortedTenants : tenantRecords, 'platform-summary.csv')}
+              className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/15"
+            >
+              <Download className="h-4 w-4" />
+              Generate Report
+            </button>
+            <Link
+              href="/platform/audit"
+              className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/15"
+            >
+              <Activity className="h-4 w-4" />
+              Open Audit Logs
+            </Link>
+            <Link
+              href="/platform/alerts"
+              className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/15"
+            >
+              <AlertTriangle className="h-4 w-4" />
+              Open Alerts
             </Link>
           </>
         }
       />
-
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
-        <div className="rounded-[28px] border border-slate-200/80 bg-[linear-gradient(135deg,#0f172a_0%,#1e293b_55%,#1d4ed8_100%)] px-6 py-6 text-white shadow-[0_30px_80px_rgba(15,23,42,0.26)]">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-sky-200/80">
-                Executive Overview
-              </p>
-              <h2 className="mt-3 text-[clamp(1.8rem,1.2rem+1.4vw,2.8rem)] font-semibold tracking-[-0.04em]">
-                See what is happening, what needs attention, and what to do next.
-              </h2>
-              <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-200/80">
-                Platform-level insight only. No branch queues, no visa ops, no lead clutter. Just
-                tenant health, commercial readiness, onboarding progress, and owner-grade control.
-              </p>
-              <div className="mt-6 flex flex-wrap gap-3">
-                <Link
-                  href="/platform/tenants"
-                  className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-slate-100"
-                >
-                  Open Tenant Management
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-                <Link
-                  href="/platform/audit"
-                  className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/15"
-                >
-                  Review Audit
-                </Link>
-              </div>
-            </div>
-            <div className="grid w-full gap-3 sm:grid-cols-3 lg:max-w-[460px]">
-              {dashboardModel.heroInsights.map((item) => (
-                <div
-                  key={item.id}
-                  className="rounded-[24px] border border-white/10 bg-white/10 px-4 py-4 backdrop-blur"
-                >
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-300">
-                    {item.label}
-                  </p>
-                  <p className="mt-3 text-2xl font-semibold tracking-[-0.04em]">{item.value}</p>
-                  <p className="mt-2 text-sm leading-6 text-slate-300">{item.helper}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <AttentionPanel
-          items={dashboardModel.attentionItems.map((item) => ({
-            ...item,
-            level:
-              item.level === 'critical'
-                ? 'critical'
-                : item.level === 'watch'
-                  ? 'warning'
-                  : 'success',
-          }))}
-          title="Platform watchlist"
-          subtitle="The owner actions most likely to unblock revenue, rollout quality, or tenant confidence."
-        />
-      </section>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {kpis.map((item) => (
@@ -288,40 +371,15 @@ export default function PlatformDashboardPage() {
       </section>
 
       <section className="grid gap-4 xl:grid-cols-4">
-        <QuickActionCard
-          href="/platform/onboarding"
-          icon={Sparkles}
-          label="Launch a new tenant"
-          description="Create a consultancy workspace, assign a plan, and start onboarding without touching tenant operations."
-        />
-        <QuickActionCard
-          href="/platform/import"
-          icon={FileUp}
-          label="Bulk import consultancies"
-          description="Use the guided import flow to validate CSV or JSON tenant files before any records are created."
-        />
-        <QuickActionCard
-          href="/platform/billing"
-          icon={CreditCard}
-          label="Review billing posture"
-          description="Open subscription health, plan mix, and billing risk with a commercial-first lens."
-        />
-        <QuickActionCard
-          href="/platform/audit"
-          icon={Activity}
-          label="Open audit timeline"
-          description="Inspect platform-level activity, impersonation, and rollout events in one clean owner view."
-        />
+        <QuickActionCard href="/platform/onboarding" icon={Sparkles} label="Add Tenant" description="Launch a new consultancy workspace, assign a plan, and start onboarding from the platform layer." />
+        <QuickActionCard href="/platform/import" icon={FileUp} label="Upload Setup Workbook" description="Preview workbook imports, catch validation errors, and push clean tenant provisioning batches." />
+        <QuickActionCard href="/platform/tenants" icon={Building2} label="Open Tenant Management" description="Inspect every tenant, open the right drawer, and move quickly into billing, audit, or onboarding actions." />
+        <QuickActionCard href="/platform/ai-insights" icon={Sparkles} label="Open AI Insights" description="See explainable platform signals around declining health, onboarding bottlenecks, and rollout readiness." />
       </section>
 
-      <section className="grid gap-5 xl:grid-cols-2">
-        <ChartCard
-          eyebrow="Revenue Trend"
-          title="Recurring revenue momentum"
-          subtitle="Estimated monthly recurring revenue derived from active plan mix across the portfolio."
-          badge={<StatusBadge label={`${dashboardModel.revenueTrend.length} months`} tone="info" />}
-        >
-          <div className="h-[280px]">
+      <section className="grid gap-5 xl:grid-cols-2 2xl:grid-cols-4">
+        <ChartCard eyebrow="Revenue Trend" title="Recurring revenue visibility" subtitle="Estimated MRR from current active plan mix across the portfolio.">
+          <div className="h-[250px]">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={dashboardModel.revenueTrend}>
                 <defs>
@@ -332,50 +390,22 @@ export default function PlatformDashboardPage() {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
                 <XAxis dataKey="label" stroke="#94a3b8" tickLine={false} axisLine={false} />
-                <YAxis
-                  stroke="#94a3b8"
-                  tickLine={false}
-                  axisLine={false}
-                  tickFormatter={(value) => `$${Math.round(value / 1000)}k`}
-                />
-                <Tooltip
-                  contentStyle={{
-                    borderRadius: 16,
-                    border: '1px solid rgba(148,163,184,0.18)',
-                    boxShadow: '0 18px 50px rgba(15,23,42,0.12)',
-                  }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="value"
-                  stroke="#2563eb"
-                  strokeWidth={2.4}
-                  fill="url(#platformRevenueFill)"
-                />
+                <YAxis tickFormatter={(value) => `$${Math.round(value / 1000)}k`} stroke="#94a3b8" tickLine={false} axisLine={false} />
+                <Tooltip />
+                <Area type="monotone" dataKey="value" stroke="#2563eb" strokeWidth={2.4} fill="url(#platformRevenueFill)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </ChartCard>
 
-        <ChartCard
-          eyebrow="Tenant Growth"
-          title="Portfolio expansion"
-          subtitle="Cumulative tenancy footprint and active base over time."
-          badge={<StatusBadge label="Active vs total" tone="success" />}
-        >
-          <div className="h-[280px]">
+        <ChartCard eyebrow="Tenant Growth" title="Portfolio expansion" subtitle="Total tenants versus active operating base over time.">
+          <div className="h-[250px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={dashboardModel.tenantGrowthTrend} barGap={12}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
                 <XAxis dataKey="label" stroke="#94a3b8" tickLine={false} axisLine={false} />
                 <YAxis stroke="#94a3b8" tickLine={false} axisLine={false} />
-                <Tooltip
-                  contentStyle={{
-                    borderRadius: 16,
-                    border: '1px solid rgba(148,163,184,0.18)',
-                    boxShadow: '0 18px 50px rgba(15,23,42,0.12)',
-                  }}
-                />
+                <Tooltip />
                 <Bar dataKey="secondaryValue" fill="#0f172a" radius={[8, 8, 0, 0]} />
                 <Bar dataKey="value" fill="#93c5fd" radius={[8, 8, 0, 0]} />
               </BarChart>
@@ -383,58 +413,29 @@ export default function PlatformDashboardPage() {
           </div>
         </ChartCard>
 
-        <ChartCard
-          eyebrow="Plan Distribution"
-          title="Commercial mix by plan"
-          subtitle="A clean view of how tenancy is distributed across platform pricing tiers."
-          badge={<StatusBadge label="Portfolio mix" tone="neutral" />}
-        >
+        <ChartCard eyebrow="Plan Distribution" title="Commercial mix" subtitle="How the portfolio is distributed across pricing tiers.">
           <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-            <div className="h-[240px]">
+            <div className="h-[220px]">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie
-                    data={dashboardModel.planDistribution}
-                    dataKey="value"
-                    nameKey="label"
-                    innerRadius={58}
-                    outerRadius={84}
-                    paddingAngle={4}
-                  >
+                  <Pie data={dashboardModel.planDistribution} dataKey="value" nameKey="label" innerRadius={50} outerRadius={82} paddingAngle={4}>
                     {dashboardModel.planDistribution.map((entry, index) => (
-                      <Cell
-                        key={`${entry.label}-${index}`}
-                        fill={chartPalette[index % chartPalette.length]}
-                      />
+                      <Cell key={entry.label} fill={chartPalette[index % chartPalette.length]} />
                     ))}
                   </Pie>
-                  <Tooltip
-                    contentStyle={{
-                      borderRadius: 16,
-                      border: '1px solid rgba(148,163,184,0.18)',
-                      boxShadow: '0 18px 50px rgba(15,23,42,0.12)',
-                    }}
-                  />
+                  <Tooltip />
                 </PieChart>
               </ResponsiveContainer>
             </div>
             <div className="space-y-3">
               {dashboardModel.planDistribution.map((item, index) => (
-                <div
-                  key={item.label}
-                  className="rounded-[22px] border border-slate-200/80 bg-slate-50/80 p-4 dark:border-slate-800 dark:bg-slate-900/70"
-                >
+                <div key={item.label} className="rounded-[22px] border border-slate-200/80 bg-slate-50/80 p-4 dark:border-slate-800 dark:bg-slate-900/70">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
-                      <span
-                        className="h-3 w-3 rounded-full"
-                        style={{ backgroundColor: chartPalette[index % chartPalette.length] }}
-                      />
+                      <span className="h-3 w-3 rounded-full" style={{ backgroundColor: chartPalette[index % chartPalette.length] }} />
                       <p className="font-semibold text-slate-950 dark:text-slate-50">{item.label}</p>
                     </div>
-                    <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">
-                      {item.value}
-                    </p>
+                    <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">{item.value}</p>
                   </div>
                 </div>
               ))}
@@ -442,170 +443,161 @@ export default function PlatformDashboardPage() {
           </div>
         </ChartCard>
 
-        <ChartCard
-          eyebrow="Onboarding Status"
-          title="Readiness distribution"
-          subtitle="Which tenants are complete, still in progress, or blocked before a clean launch."
-          badge={<StatusBadge label={`${dashboardModel.averageSetupCompletion}% avg`} tone="warning" />}
-        >
+        <ChartCard eyebrow="Onboarding Completion" title="Readiness distribution" subtitle="Which tenants are complete, in progress, or blocked before launch.">
           <div className="space-y-4">
             {dashboardModel.onboardingDistribution.map((item, index) => (
               <div key={item.label}>
                 <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <span
-                      className="h-3 w-3 rounded-full"
-                      style={{ backgroundColor: chartPalette[index + 1] }}
-                    />
-                    <p className="text-sm font-semibold text-slate-950 dark:text-slate-50">
-                      {item.label}
-                    </p>
-                  </div>
-                  <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">
-                    {item.value}
-                  </p>
+                  <p className="text-sm font-semibold text-slate-950 dark:text-slate-50">{item.label}</p>
+                  <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">{item.value}</p>
                 </div>
-                <ProgressBar
-                  className="mt-3"
-                  value={(item.value / Math.max(dashboardModel.tenants.length, 1)) * 100}
-                  tone={index === 0 ? 'success' : index === 1 ? 'warning' : 'danger'}
-                />
+                <ProgressBar className="mt-3" value={(item.value / Math.max(tenantRecords.length, 1)) * 100} tone={index === 0 ? 'success' : index === 1 ? 'warning' : 'danger'} />
               </div>
             ))}
           </div>
         </ChartCard>
       </section>
 
-      <section className="grid gap-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(340px,0.7fr)]">
-        <div className="rounded-[28px] border border-slate-200/80 bg-white/96 shadow-[0_24px_60px_rgba(15,23,42,0.08)] dark:border-slate-800 dark:bg-slate-950/92">
-          <div className="flex flex-col gap-3 border-b border-slate-200/80 px-5 py-5 md:flex-row md:items-end md:justify-between dark:border-slate-800">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500 dark:text-slate-400">
-                Priority Tenants
-              </p>
-              <h3 className="mt-2 text-lg font-semibold text-slate-950 dark:text-slate-50">
-                What deserves owner attention first
-              </h3>
-              <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
-                Tenants with the lowest readiness or strongest warning signals are elevated here.
-              </p>
-            </div>
-            <Link
-              href="/platform/tenants"
-              className="inline-flex items-center gap-2 text-sm font-semibold text-sky-700 transition hover:text-sky-800 dark:text-sky-300 dark:hover:text-sky-200"
-            >
-              Open full management
-              <ArrowRight className="h-4 w-4" />
-            </Link>
+      <section className="grid gap-5 xl:grid-cols-2 2xl:grid-cols-4">
+        <ChartCard eyebrow="Health Distribution" title="Tenant health posture" subtitle="How the portfolio is distributed by platform health score.">
+          <div className="space-y-4">
+            {dashboardModel.healthDistribution.map((item, index) => (
+              <div key={item.label}>
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-slate-950 dark:text-slate-50">{item.label}</p>
+                  <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">{item.value}</p>
+                </div>
+                <ProgressBar className="mt-3" value={(item.value / Math.max(tenantRecords.length, 1)) * 100} tone={index === 0 ? 'success' : index === 1 ? 'warning' : 'danger'} />
+              </div>
+            ))}
           </div>
-          <div className="divide-y divide-slate-100 dark:divide-slate-900">
-            {priorityTenants.length ? (
-              priorityTenants.map((tenant) => (
-                <button
-                  key={tenant.id}
-                  type="button"
-                  onClick={() => handleViewTenant(tenant)}
-                  className="grid w-full grid-cols-[minmax(0,1.2fr)_120px_140px_120px] gap-4 px-5 py-4 text-left transition hover:bg-slate-50/80 dark:hover:bg-slate-900/70"
-                >
-                  <div>
-                    <p className="font-semibold text-slate-950 dark:text-slate-100">{tenant.name}</p>
-                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                      {tenant.ownerEmail}
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    <StatusBadge label={tenant.status} tone={getStatusTone(tenant.status)} />
-                    <p className="text-xs text-slate-400 dark:text-slate-500">{tenant.planLabel}</p>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-sm font-semibold text-slate-950 dark:text-slate-100">
-                      {tenant.setupCompletion}% ready
-                    </p>
-                    <ProgressBar
-                      value={tenant.setupCompletion}
-                      tone={
-                        tenant.setupCompletion >= 85
-                          ? 'success'
-                          : tenant.setupCompletion >= 55
-                            ? 'warning'
-                            : 'danger'
-                      }
-                    />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-950 dark:text-slate-100">
-                      {formatRelativeDate(tenant.lastActivityAt)}
-                    </p>
-                    <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
-                      {tenant.country}
-                    </p>
-                  </div>
-                </button>
-              ))
-            ) : (
-              <div className="px-5 py-5">
-                <EmptyResultsState
-                  title="No tenants available"
-                  description="Seed or import your first consultancy to populate the owner command center."
+        </ChartCard>
+
+        <ChartCard eyebrow="Branch Distribution" title="Operational scale mix" subtitle="Branch footprint buckets across the visible tenant portfolio.">
+          <div className="space-y-4">
+            {dashboardModel.branchDistribution.map((item) => (
+              <div key={item.label} className="rounded-[20px] border border-slate-200/80 bg-slate-50/80 px-4 py-4 dark:border-slate-800 dark:bg-slate-900/70">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="font-semibold text-slate-950 dark:text-slate-50">{item.label}</p>
+                  <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">{item.value}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </ChartCard>
+
+        <ChartCard eyebrow="Alert Severity" title="Issue concentration" subtitle="Critical versus watch-level issues across tenants and import workflows.">
+          <div className="space-y-4">
+            {dashboardModel.alertSeverityDistribution.map((item, index) => (
+              <div key={item.label}>
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-slate-950 dark:text-slate-50">{item.label}</p>
+                  <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">{item.value}</p>
+                </div>
+                <ProgressBar className="mt-3" value={(item.value / Math.max(tenantRecords.length, 1)) * 100} tone={index === 0 ? 'danger' : index === 1 ? 'warning' : 'success'} />
+              </div>
+            ))}
+          </div>
+        </ChartCard>
+
+        <ChartCard eyebrow="Import Trend" title="Import success vs failure" subtitle="Workbook pipeline visibility across recent months.">
+          <div className="h-[250px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={dashboardModel.importTrend} barGap={12}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                <XAxis dataKey="label" stroke="#94a3b8" tickLine={false} axisLine={false} />
+                <YAxis stroke="#94a3b8" tickLine={false} axisLine={false} allowDecimals={false} />
+                <Tooltip />
+                <Bar dataKey="value" name="Imported" fill="#14b8a6" radius={[8, 8, 0, 0]} />
+                <Bar dataKey="secondaryValue" name="Failed" fill="#ef4444" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </ChartCard>
+      </section>
+
+      <section className="grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(340px,0.85fr)]">
+        <div className="space-y-5">
+          <ChartCard eyebrow="Tenant Management Preview" title="Platform tenant supervision" subtitle="Search, sort, and scan tenants from the command center before moving into deeper management.">
+            {tenantRecords.length ? (
+              <div className="space-y-5">
+                <PlatformTenantFilterBar filters={filters} countries={countries} onChange={(field, value) => setFilters((current) => ({ ...current, [field]: value }))} onReset={() => setFilters({ ...DEFAULT_TENANT_FILTERS })} />
+                <PlatformTenantTable
+                  items={pagination.items}
+                  selectedIds={selectedIds}
+                  sortField={sortField}
+                  sortDirection={sortDirection}
+                  page={pagination.page}
+                  pages={pagination.pages}
+                  total={pagination.total}
+                  onToggleAllPage={(checked) =>
+                    setSelectedIds((current) => {
+                      const pageIds = pagination.items.map((item) => item.id);
+                      return checked ? Array.from(new Set([...current, ...pageIds])) : current.filter((id) => !pageIds.includes(id));
+                    })
+                  }
+                  onToggleSelect={(tenantId) =>
+                    setSelectedIds((current) =>
+                      current.includes(tenantId) ? current.filter((id) => id !== tenantId) : [...current, tenantId]
+                    )
+                  }
+                  onSortChange={(field) => {
+                    setSortField(field);
+                    setSortDirection((current) =>
+                      sortField === field ? (current === 'asc' ? 'desc' : 'asc') : 'desc'
+                    );
+                  }}
+                  onView={handleViewTenant}
+                  onEdit={(tenant) => router.push(`/platform/tenants/${tenant.id}`)}
+                  onOpenOnboarding={(tenant) => router.push(`/platform/onboarding?tenant=${tenant.id}`)}
+                  onOpenTenant={capabilities.canImpersonate ? openTenantWorkspace : undefined}
+                  onOpenBilling={(tenant) => router.push(`/platform/tenants/${tenant.id}?tab=subscription`)}
+                  onOpenAudit={(tenant) => router.push(`/platform/tenants/${tenant.id}?tab=audit`)}
+                  onToggleStatus={(tenant) =>
+                    superAdminAPI
+                      .updateTenantStatus(tenant.id, { status: tenant.status === 'suspended' ? 'active' : 'suspended' })
+                      .then(() => loadCommandCenter())
+                  }
+                  onPageChange={setPage}
                 />
               </div>
+            ) : (
+              <EmptyResultsState title="No tenants yet" description="Create your first consultancy or import a setup workbook to populate the super admin command center." action={<Link href="/platform/onboarding" className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-white">Launch onboarding</Link>} />
             )}
-          </div>
+          </ChartCard>
+
+          <ChartCard eyebrow="AI Insights Panel" title="Explainable platform insight" subtitle="Operational insight driven by tenant health, import posture, adoption risk, and launch readiness.">
+            {dashboardModel.aiInsights.length ? (
+              <div className="grid gap-3 xl:grid-cols-2">
+                {dashboardModel.aiInsights.map((insight) => (
+                  <InsightCard key={insight.id} {...insight} />
+                ))}
+              </div>
+            ) : (
+              <EmptyResultsState title="No AI insights yet" description="Once tenants, imports, and platform activity begin accumulating, explainable insights will appear here." compact />
+            )}
+          </ChartCard>
         </div>
 
         <div className="space-y-5">
-          <ChartCard
-            eyebrow="Activity Feed"
-            title="Recent owner-visible activity"
-            subtitle="Platform actions, rollouts, and events that changed tenancy state or launch posture."
-            badge={<StatusBadge label={`${dashboardModel.activityFeed.length} recent`} tone="neutral" />}
-          >
-            <ActivityList items={dashboardModel.activityFeed} />
-          </ChartCard>
+          <AttentionPanel items={dashboardModel.attentionItems.map((item) => ({ ...item, level: item.level === 'critical' ? 'critical' : item.level === 'watch' ? 'warning' : 'success' }))} title="Attention Required" subtitle="Incomplete onboarding, failed imports, billing issues, inactive tenants, and setup risks surfaced for fast action." />
 
-          <ChartCard
-            eyebrow="Platform Insight"
-            title="What the portfolio is telling you"
-            subtitle="A clean summary of usage depth, setup posture, and warning concentration."
-            badge={<StatusBadge label="Owner lens" tone="info" />}
-          >
+          <ChartCard eyebrow="System Monitoring" title="Platform systems at a glance" subtitle="Import flow, billing posture, form coverage, and integration readiness from the platform lens.">
             <div className="grid gap-3">
-              {[
-                {
-                  label: 'Average health score',
-                  value: `${Math.round(
-                    dashboardModel.tenants.reduce((sum, tenant) => sum + tenant.healthScore, 0) /
-                      Math.max(dashboardModel.tenants.length, 1)
-                  )}/100`,
-                },
-                {
-                  label: 'Tenants with billing risk',
-                  value: String(
-                    dashboardModel.tenants.filter((tenant) =>
-                      ['past_due', 'inactive', 'cancelled'].includes(tenant.billingStatus)
-                    ).length
-                  ),
-                },
-                {
-                  label: 'Tenants over 85% ready',
-                  value: String(
-                    dashboardModel.tenants.filter((tenant) => tenant.setupCompletion >= 85).length
-                  ),
-                },
-              ].map((item) => (
-                <div
-                  key={item.label}
-                  className="rounded-[22px] border border-slate-200/80 bg-slate-50/85 p-4 dark:border-slate-800 dark:bg-slate-900/70"
-                >
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
-                    {item.label}
-                  </p>
-                  <p className="mt-3 text-2xl font-semibold tracking-[-0.04em] text-slate-950 dark:text-slate-50">
-                    {item.value}
-                  </p>
+              {dashboardModel.systemHealth.map((item) => (
+                <div key={item.id} className="rounded-[22px] border border-slate-200/80 bg-slate-50/85 p-4 dark:border-slate-800 dark:bg-slate-900/70">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="font-semibold text-slate-950 dark:text-slate-50">{item.label}</p>
+                    <StatusBadge label={item.value} tone={item.tone} />
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">{item.helper}</p>
                 </div>
               ))}
             </div>
+          </ChartCard>
+
+          <ChartCard eyebrow="Recent Platform Activity" title="Chronological owner-visible activity" subtitle="Tenant creation, import updates, billing changes, and audit-visible platform actions.">
+            <ActivityList items={dashboardModel.activityFeed} />
           </ChartCard>
         </div>
       </section>
@@ -614,13 +606,14 @@ export default function PlatformDashboardPage() {
         open={drawerOpen}
         tenant={selectedTenant}
         detail={tenantDetail}
+        recentImport={selectedImport}
         loading={drawerLoading}
         onClose={() => setDrawerOpen(false)}
-        onOpenTenant={handleImpersonateTenant}
+        onOpenTenant={() => selectedTenant && openTenantWorkspace(selectedTenant)}
         onEditTenant={() => selectedTenant && router.push(`/platform/tenants/${selectedTenant.id}`)}
-        onResumeOnboarding={() =>
-          selectedTenant && router.push(`/platform/onboarding?tenant=${selectedTenant.id}`)
-        }
+        onResumeOnboarding={() => selectedTenant && router.push(`/platform/onboarding?tenant=${selectedTenant.id}`)}
+        onOpenBilling={() => selectedTenant && router.push(`/platform/tenants/${selectedTenant.id}?tab=subscription`)}
+        onOpenAudit={() => selectedTenant && router.push(`/platform/tenants/${selectedTenant.id}?tab=audit`)}
       />
     </div>
   );

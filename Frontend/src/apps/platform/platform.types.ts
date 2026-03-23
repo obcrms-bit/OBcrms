@@ -17,6 +17,8 @@ export type PlatformBillingStatus =
 
 export type TenantAttentionLevel = 'healthy' | 'watch' | 'critical';
 
+export type PlatformTone = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
+
 export type TenantSortField =
   | 'name'
   | 'plan'
@@ -89,10 +91,66 @@ export interface PlatformTenantRecord {
   raw?: any;
 }
 
+export interface PlatformImportBatchRecord {
+  id: string;
+  fileName: string;
+  fileType: string;
+  status: 'uploaded' | 'validated' | 'imported' | 'failed';
+  completionPercentage: number;
+  createdAt: string;
+  updatedAt: string;
+  createdByName: string;
+  createdByEmail: string;
+  importedTenantId?: string;
+  importedTenantName?: string;
+  totalRows: number;
+  validationErrors: number;
+  validationWarnings: number;
+  raw?: any;
+}
+
+export interface PlatformCommandInsight {
+  id: string;
+  title: string;
+  description: string;
+  severity: 'positive' | 'watch' | 'critical' | 'info';
+  href?: string;
+  actionLabel?: string;
+  meta?: string;
+  tenantId?: string;
+}
+
+export interface PlatformSystemHealthItem {
+  id: string;
+  label: string;
+  value: string;
+  helper: string;
+  tone: PlatformTone;
+}
+
+export interface PlatformCapabilitySet {
+  roleLabel: string;
+  canManagePlatform: boolean;
+  canCreateTenant: boolean;
+  canImpersonate: boolean;
+  canEditBilling: boolean;
+  canReviewAudit: boolean;
+  canAccessAiInsights: boolean;
+}
+
 export interface PlatformDashboardModel {
   tenants: PlatformTenantRecord[];
+  imports: PlatformImportBatchRecord[];
   totalMrr: number;
   averageSetupCompletion: number;
+  averageHealthScore: number;
+  platformHealthScore: number;
+  activeTenants: number;
+  suspendedTenants: number;
+  onboardingInProgress: number;
+  billingIssues: number;
+  launchReadyTenants: number;
+  activeImports: number;
   criticalIssues: number;
   heroInsights: Array<{
     id: string;
@@ -105,8 +163,19 @@ export interface PlatformDashboardModel {
   tenantGrowthTrend: PlatformChartDatum[];
   planDistribution: PlatformChartDatum[];
   onboardingDistribution: PlatformChartDatum[];
+  healthDistribution: PlatformChartDatum[];
+  branchDistribution: PlatformChartDatum[];
+  alertSeverityDistribution: PlatformChartDatum[];
+  importTrend: PlatformChartDatum[];
   attentionItems: PlatformAttentionItem[];
   activityFeed: PlatformActivityItem[];
+  aiInsights: PlatformCommandInsight[];
+  systemHealth: PlatformSystemHealthItem[];
+  emptyStates: {
+    hasTenants: boolean;
+    hasImports: boolean;
+    hasActivity: boolean;
+  };
 }
 
 export interface TenantFilterState {
@@ -129,7 +198,9 @@ export interface TenantImportRow {
   branches: string[];
   tempPassword: string;
   status: 'valid' | 'warning' | 'error';
-  errors: Partial<Record<'name' | 'domain' | 'plan' | 'ownerEmail' | 'country' | 'branches', string>>;
+  errors: Partial<
+    Record<'name' | 'domain' | 'plan' | 'ownerEmail' | 'country' | 'branches', string>
+  >;
   warnings: string[];
   runtimeError?: string;
   createdTenantId?: string;

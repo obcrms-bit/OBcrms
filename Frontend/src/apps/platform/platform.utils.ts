@@ -1,14 +1,18 @@
 import { consultancies } from '@/src/modules/owner-control-tower/data/owner-control.mock-data';
-import type { OwnerSnapshot } from '@/src/modules/owner-control-tower/types/owner-control.types';
+import { hasPermission, normalizeRoleKey } from '@/src/services/access';
 import type {
   DateRangeFilter,
   OnboardingFilter,
   PlatformActivityItem,
   PlatformAttentionItem,
   PlatformBillingStatus,
+  PlatformCapabilitySet,
   PlatformChartDatum,
+  PlatformCommandInsight,
   PlatformDashboardModel,
+  PlatformImportBatchRecord,
   PlatformPlanKey,
+  PlatformSystemHealthItem,
   PlatformTenantRecord,
   PlatformTenantStatus,
   SortDirection,
@@ -62,6 +66,13 @@ export const DEFAULT_TENANT_FILTERS: TenantFilterState = {
 
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
+
+const titleCase = (value = '') =>
+  String(value)
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (match) => match.toUpperCase());
 
 export const slugify = (value = '') =>
   String(value)
@@ -124,7 +135,7 @@ const normalizeBillingStatus = (value?: string): PlatformBillingStatus => {
     .trim()
     .toLowerCase();
 
-  if (['past_due'].includes(normalized)) {
+  if (normalized === 'past_due') {
     return 'past_due';
   }
   if (['inactive', 'suspended'].includes(normalized)) {
@@ -243,7 +254,10 @@ export const mapApiTenantToRecord = (
     setupCompletion,
     healthScore,
     lastActivityAt:
-      tenant?.company?.updatedAt || tenant?.updatedAt || tenant?.createdAt || new Date().toISOString(),
+      tenant?.company?.updatedAt ||
+      tenant?.updatedAt ||
+      tenant?.createdAt ||
+      new Date().toISOString(),
     createdAt: tenant?.createdAt || tenant?.company?.createdAt || new Date().toISOString(),
     ownerEmail:
       tenant?.company?.adminContact?.email || tenant?.company?.email || 'owner@consultancy.com',
@@ -259,7 +273,10 @@ export const mapApiTenantToRecord = (
     importIssues: warnings.filter((warning: string) =>
       /import|workflow|branding|setup/i.test(warning)
     ).length,
-    inactiveUsers: Math.max(0, Math.round((tenant?.usersCount || 0) * (healthScore < 70 ? 0.18 : 0.05))),
+    inactiveUsers: Math.max(
+      0,
+      Math.round((tenant?.usersCount || 0) * (healthScore < 70 ? 0.18 : 0.05))
+    ),
     source: 'api',
     raw: tenant,
   };
@@ -308,7 +325,8 @@ const mapMockConsultancyToRecord = (consultancy: any, index: number): PlatformTe
       healthScore,
       warnings,
     }),
-    importIssues: consultancy.importHistory?.filter((item: any) => item.status === 'failed').length || 0,
+    importIssues:
+      consultancy.importHistory?.filter((item: any) => item.status === 'failed').length || 0,
     inactiveUsers: Math.max(0, Math.round((consultancy.metrics?.users || 0) * 0.08)),
     source: 'mock',
     raw: consultancy,
@@ -322,14 +340,20 @@ export const buildMockPlatformTenants = (): PlatformTenantRecord[] =>
     const name =
       index < consultancies.length
         ? base.name
-        : `${prefix} ${base.name.replace(/^(NorthStar|Atlas|BluePeak|VisaVerse|Origin)\s*/i, '')}`.trim();
+        : `${prefix} ${base.name.replace(
+            /^(NorthStar|Atlas|BluePeak|VisaVerse|Origin)\s*/i,
+            ''
+          )}`.trim();
     const record = mapMockConsultancyToRecord(
       {
         ...base,
         id: `${base.id}-${index + 1}`,
         tenantId: `TEN-${String(index + 1).padStart(3, '0')}`,
         name,
-        country: index % 2 === 0 ? base.country : base.countries?.[index % base.countries.length] || base.country,
+        country:
+          index % 2 === 0
+            ? base.country
+            : base.countries?.[index % base.countries.length] || base.country,
         status:
           index % 7 === 0
             ? 'suspended'
@@ -338,12 +362,9 @@ export const buildMockPlatformTenants = (): PlatformTenantRecord[] =>
               : index % 4 === 0
                 ? 'onboarding'
                 : 'active',
-        plan:
-          index % 6 === 0 ? 'Enterprise' : index % 3 === 0 ? 'Growth' : 'Launch',
+        plan: index % 6 === 0 ? 'Enterprise' : index % 3 === 0 ? 'Growth' : 'Launch',
         setupCompletion: clamp((base.setupCompletion || 68) + ((index % 9) - 4) * 5, 24, 100),
-        lastActivity: new Date(
-          Date.now() - (index + 1) * 1000 * 60 * 60 * 11
-        ).toISOString(),
+        lastActivity: new Date(Date.now() - (index + 1) * 1000 * 60 * 60 * 11).toISOString(),
         onboardingStartedAt: new Date(
           Date.now() - (index + 14) * 1000 * 60 * 60 * 24 * 9
         ).toISOString(),
@@ -354,9 +375,7 @@ export const buildMockPlatformTenants = (): PlatformTenantRecord[] =>
               ? 'suspended'
               : index % 5 === 0
                 ? 'trial'
-                : index % 4 === 0
-                  ? 'active'
-                  : 'active',
+                : 'active',
           arr: Math.max(18000, (base.subscription?.arr || 36000) + index * 2400),
         },
         metrics: {
@@ -386,6 +405,30 @@ export const buildPlatformTenantDataset = (
   return buildMockPlatformTenants();
 };
 
+export const mapImportBatchToRecord = (batch: any): PlatformImportBatchRecord => ({
+  id: batch?._id || batch?.id || `import-${Math.random().toString(36).slice(2, 9)}`,
+  fileName: batch?.fileName || 'Untitled import',
+  fileType: String(batch?.fileType || 'csv').toUpperCase(),
+  status: ['uploaded', 'validated', 'imported', 'failed'].includes(batch?.status)
+    ? batch.status
+    : 'uploaded',
+  completionPercentage: clamp(Number(batch?.completionPercentage || 0), 0, 100),
+  createdAt: batch?.createdAt || new Date().toISOString(),
+  updatedAt: batch?.updatedAt || batch?.createdAt || new Date().toISOString(),
+  createdByName: batch?.createdBy?.name || 'Platform Ops',
+  createdByEmail: batch?.createdBy?.email || '',
+  importedTenantId: batch?.importedTenantId?._id || batch?.importedTenantId || '',
+  importedTenantName: batch?.importedTenantId?.name || '',
+  totalRows: Number(batch?.validation?.totalRows || batch?.summary?.totalRows || 0),
+  validationErrors: Number(
+    batch?.validation?.errorRows || batch?.summary?.validationErrors || 0
+  ),
+  validationWarnings: Number(
+    batch?.validation?.warningRows || batch?.summary?.validationWarnings || 0
+  ),
+  raw: batch,
+});
+
 const toMonthLabel = (date: Date) =>
   new Intl.DateTimeFormat('en-US', { month: 'short' }).format(date);
 
@@ -398,52 +441,450 @@ const buildSeriesMonths = (count = 6) =>
     return date;
   });
 
-const sameOrBeforeMonth = (left: string, rightMonth: Date) => {
-  const date = new Date(left);
+const sameOrBeforeMonth = (value: string, rightMonth: Date) => {
+  const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
     return false;
   }
 
-  const monthDate = new Date(rightMonth.getFullYear(), rightMonth.getMonth() + 1, 0, 23, 59, 59, 999);
+  const monthDate = new Date(
+    rightMonth.getFullYear(),
+    rightMonth.getMonth() + 1,
+    0,
+    23,
+    59,
+    59,
+    999
+  );
   return date <= monthDate;
 };
 
-export const buildDashboardModel = (
+const isBillingIssue = (tenant: PlatformTenantRecord) =>
+  ['past_due', 'inactive', 'cancelled'].includes(tenant.billingStatus) ||
+  tenant.status === 'past_due';
+
+const getWarningByPattern = (warnings: string[], pattern: RegExp) =>
+  warnings.find((warning) => pattern.test(warning));
+
+const getImportAttentionLevel = (batch: PlatformImportBatchRecord): TenantAttentionLevel => {
+  if (batch.status === 'failed' || batch.validationErrors > 0) {
+    return 'critical';
+  }
+  if (batch.status === 'uploaded' || batch.validationWarnings > 0) {
+    return 'watch';
+  }
+  return 'healthy';
+};
+
+const buildTenantAttentionItems = (tenants: PlatformTenantRecord[]): PlatformAttentionItem[] =>
+  tenants.flatMap((tenant) => {
+    const items: PlatformAttentionItem[] = [];
+
+    if (tenant.setupCompletion < 70) {
+      items.push({
+        id: `${tenant.id}-setup`,
+        tenantId: tenant.id,
+        tenantName: tenant.name,
+        level: tenant.setupCompletion < 50 ? 'critical' : 'watch',
+        label: 'Incomplete onboarding',
+        message: `${tenant.setupCompletion}% setup completion. Resume onboarding before launch confidence drops.`,
+        category: 'onboarding',
+      });
+    }
+
+    if (isBillingIssue(tenant)) {
+      items.push({
+        id: `${tenant.id}-billing`,
+        tenantId: tenant.id,
+        tenantName: tenant.name,
+        level: 'critical',
+        label: 'Billing issue',
+        message: `Billing status is ${tenant.billingStatus}. Commercial follow-up is required.`,
+        category: 'billing',
+      });
+    }
+
+    if (tenant.status === 'suspended') {
+      items.push({
+        id: `${tenant.id}-suspended`,
+        tenantId: tenant.id,
+        tenantName: tenant.name,
+        level: 'critical',
+        label: 'Inactive tenant',
+        message: 'Tenant access is suspended. Review whether to reactivate, offboard, or intervene.',
+        category: 'lifecycle',
+      });
+    }
+
+    if (
+      tenant.users === 0 ||
+      tenant.inactiveUsers >= Math.max(2, Math.round(tenant.users * 0.25))
+    ) {
+      items.push({
+        id: `${tenant.id}-users`,
+        tenantId: tenant.id,
+        tenantName: tenant.name,
+        level: tenant.users === 0 ? 'critical' : 'watch',
+        label: 'Adoption risk',
+        message:
+          tenant.users === 0
+            ? 'No active tenant users detected yet.'
+            : `${tenant.inactiveUsers} users appear inactive from the platform lens.`,
+        category: 'adoption',
+      });
+    }
+
+    const formsWarning = getWarningByPattern(tenant.warnings, /public lead capture/i);
+    if (formsWarning) {
+      items.push({
+        id: `${tenant.id}-forms`,
+        tenantId: tenant.id,
+        tenantName: tenant.name,
+        level: 'watch',
+        label: 'Forms missing',
+        message: formsWarning,
+        category: 'forms',
+      });
+    }
+
+    const branchWarning = getWarningByPattern(tenant.warnings, /head office branch|branch/i);
+    if (branchWarning) {
+      items.push({
+        id: `${tenant.id}-branch`,
+        tenantId: tenant.id,
+        tenantName: tenant.name,
+        level: 'watch',
+        label: 'Branch setup risk',
+        message: branchWarning,
+        category: 'branches',
+      });
+    }
+
+    const integrationWarning = getWarningByPattern(tenant.warnings, /integration/i);
+    if (integrationWarning) {
+      items.push({
+        id: `${tenant.id}-integration`,
+        tenantId: tenant.id,
+        tenantName: tenant.name,
+        level: 'watch',
+        label: 'Integration gap',
+        message: integrationWarning,
+        category: 'integrations',
+      });
+    }
+
+    return items;
+  });
+
+const buildImportAttentionItems = (
+  batches: PlatformImportBatchRecord[]
+): PlatformAttentionItem[] =>
+  batches
+    .filter((batch) => batch.status !== 'imported')
+    .map((batch) => ({
+      id: `${batch.id}-import`,
+      tenantId: batch.importedTenantId || batch.id,
+      tenantName: batch.importedTenantName || 'Import Center',
+      level: getImportAttentionLevel(batch),
+      label: batch.status === 'failed' ? 'Failed import' : 'Import review',
+      message:
+        batch.status === 'failed'
+          ? `${batch.fileName} failed with ${batch.validationErrors || 1} blocking validation issue(s).`
+          : `${batch.fileName} is ${batch.status}. Review before tenant provisioning continues.`,
+      category: 'imports',
+    }));
+
+const buildActivityFeed = (
+  overview: any,
+  importBatches: PlatformImportBatchRecord[]
+): PlatformActivityItem[] => {
+  const auditItems: PlatformActivityItem[] = (overview?.recentAuditLogs || []).map((log: any) => ({
+    id: log._id,
+    title: titleCase(log.action || 'platform_activity'),
+    description: log.resourceName || log.module || 'Platform-level action recorded',
+    timestamp: log.createdAt,
+    actor: log.userName || 'System',
+    module: log.module,
+    status: log.status || 'success',
+  }));
+
+  const importItems: PlatformActivityItem[] = importBatches.map((batch) => ({
+    id: `${batch.id}-activity`,
+    title:
+      batch.status === 'imported'
+        ? 'Tenant import completed'
+        : batch.status === 'failed'
+          ? 'Tenant import failed'
+          : 'Tenant import updated',
+    description: `${batch.fileName}${batch.importedTenantName ? ` / ${batch.importedTenantName}` : ''}`,
+    timestamp: batch.updatedAt || batch.createdAt,
+    actor: batch.createdByName || 'Platform Ops',
+    module: 'imports',
+    status: batch.status,
+  }));
+
+  return [...auditItems, ...importItems]
+    .sort((left, right) => +new Date(right.timestamp) - +new Date(left.timestamp))
+    .slice(0, 12);
+};
+
+const buildAiInsights = (
+  tenants: PlatformTenantRecord[],
+  importBatches: PlatformImportBatchRecord[]
+): PlatformCommandInsight[] => {
+  const criticalTenants = tenants
+    .filter((tenant) => tenant.attentionLevel === 'critical')
+    .sort((left, right) => left.healthScore - right.healthScore);
+  const blockedOnboarding = tenants.filter((tenant) => tenant.setupCompletion < 55);
+  const launchReady = tenants.filter(
+    (tenant) =>
+      tenant.setupCompletion >= 85 &&
+      tenant.status !== 'suspended' &&
+      !isBillingIssue(tenant)
+  );
+  const noFormsTenants = tenants.filter((tenant) =>
+    tenant.warnings.some((warning) => /public lead capture/i.test(warning))
+  );
+  const branchMismatchTenants = tenants.filter(
+    (tenant) => tenant.branches > 0 && tenant.users <= tenant.branches
+  );
+  const failedImports = importBatches.filter((batch) => batch.status === 'failed');
+
+  const insights: PlatformCommandInsight[] = [];
+
+  if (criticalTenants.length) {
+    insights.push({
+      id: 'declining-tenants',
+      title: `${criticalTenants.length} tenants show declining health`,
+      description: `${criticalTenants
+        .slice(0, 3)
+        .map((tenant) => tenant.name)
+        .join(', ')} need platform intervention before support load grows.`,
+      severity: 'critical',
+      href: '/platform/alerts',
+      actionLabel: 'Review alerts',
+      meta: `${criticalTenants[0].healthScore}/100 lowest health score`,
+      tenantId: criticalTenants[0].id,
+    });
+  }
+
+  if (blockedOnboarding.length) {
+    insights.push({
+      id: 'onboarding-bottleneck',
+      title: `${blockedOnboarding.length} tenants are blocked in onboarding`,
+      description: 'Missing setup prerequisites and unresolved launch tasks are slowing activation.',
+      severity: 'watch',
+      href: '/platform/onboarding',
+      actionLabel: 'Resume onboarding',
+      meta: `${blockedOnboarding.filter((tenant) => tenant.setupCompletion < 40).length} below 40% ready`,
+      tenantId: blockedOnboarding[0].id,
+    });
+  }
+
+  if (failedImports.length) {
+    insights.push({
+      id: 'import-risk',
+      title: `${failedImports.length} import batches need correction`,
+      description: 'Workbook validation errors are blocking tenant provisioning and rollout timelines.',
+      severity: 'critical',
+      href: '/platform/import',
+      actionLabel: 'Open import center',
+      meta: `${failedImports.reduce((sum, batch) => sum + batch.validationErrors, 0)} validation errors`,
+    });
+  }
+
+  if (launchReady.length) {
+    insights.push({
+      id: 'launch-ready',
+      title: `${launchReady.length} tenants are launch ready`,
+      description: 'These workspaces are sufficiently configured and can be pushed toward activation or case studies.',
+      severity: 'positive',
+      href: '/platform/tenants',
+      actionLabel: 'Open tenant list',
+      meta: `${launchReady.slice(0, 3).map((tenant) => tenant.name).join(', ')}`,
+      tenantId: launchReady[0].id,
+    });
+  }
+
+  if (noFormsTenants.length) {
+    insights.push({
+      id: 'forms-gap',
+      title: `${noFormsTenants.length} tenants have no form capture configured`,
+      description: 'Lead intake coverage is incomplete, which will slow acquisition after launch.',
+      severity: 'info',
+      href: '/platform/settings?panel=integrations',
+      actionLabel: 'Review white-label setup',
+      meta: 'Missing website or public-form readiness',
+      tenantId: noFormsTenants[0].id,
+    });
+  }
+
+  if (branchMismatchTenants.length) {
+    insights.push({
+      id: 'branch-coverage',
+      title: `${branchMismatchTenants.length} tenants may be under-staffed across branches`,
+      description:
+        'Branch count is outpacing active user count, which can create uneven service quality and routing risk.',
+      severity: 'watch',
+      href: '/platform/tenants',
+      actionLabel: 'Inspect tenant staffing',
+      meta: `${branchMismatchTenants[0].name} is the strongest outlier`,
+      tenantId: branchMismatchTenants[0].id,
+    });
+  }
+
+  return insights.slice(0, 6);
+};
+
+const buildSystemHealth = (
   overview: any,
   tenants: PlatformTenantRecord[],
-  ownerSnapshot?: OwnerSnapshot | null
-): PlatformDashboardModel => {
-  const totalMrr = tenants.reduce((sum, tenant) => sum + (tenant.status === 'suspended' ? 0 : tenant.mrr), 0);
+  importBatches: PlatformImportBatchRecord[],
+  activityFeed: PlatformActivityItem[]
+): PlatformSystemHealthItem[] => {
+  const activeImports = importBatches.filter((batch) =>
+    ['uploaded', 'validated'].includes(batch.status)
+  ).length;
+  const failedImports = importBatches.filter((batch) => batch.status === 'failed').length;
+  const formCoverage = tenants.filter(
+    (tenant) => !tenant.warnings.some((warning) => /public lead capture/i.test(warning))
+  ).length;
+  const integrationsEnabled = tenants.filter(
+    (tenant) => !tenant.warnings.some((warning) => /integration/i.test(warning))
+  ).length;
+  const billingIssues = tenants.filter(isBillingIssue).length;
+  const platformAlerts = tenants.filter((tenant) => tenant.attentionLevel !== 'healthy').length;
+
+  return [
+    {
+      id: 'imports',
+      label: 'Import jobs',
+      value: activeImports
+        ? `${activeImports} active`
+        : failedImports
+          ? `${failedImports} failed`
+          : 'Idle',
+      helper: failedImports
+        ? `${failedImports} batches need correction`
+        : 'No active provisioning queues detected',
+      tone: failedImports ? 'danger' : activeImports ? 'info' : 'neutral',
+    },
+    {
+      id: 'billing',
+      label: 'Billing posture',
+      value: billingIssues ? `${billingIssues} issues` : 'Healthy',
+      helper: `${overview?.supportTools?.pastDueTenants || 0} past due / ${overview?.supportTools?.suspendedTenants || 0} suspended`,
+      tone: billingIssues ? 'warning' : 'success',
+    },
+    {
+      id: 'forms',
+      label: 'Form coverage',
+      value: `${formCoverage}/${Math.max(tenants.length, 0)}`,
+      helper: tenants.length
+        ? 'Tenants with intake forms or lead capture configured'
+        : 'No tenants onboarded yet',
+      tone:
+        !tenants.length ? 'neutral' : formCoverage === tenants.length ? 'success' : 'warning',
+    },
+    {
+      id: 'integrations',
+      label: 'Integration readiness',
+      value: `${integrationsEnabled}/${Math.max(tenants.length, 0)}`,
+      helper: tenants.length ? 'Tenants without integration warnings' : 'No tenants to inspect',
+      tone:
+        !tenants.length
+          ? 'neutral'
+          : integrationsEnabled >= Math.ceil(tenants.length * 0.8)
+            ? 'success'
+            : 'info',
+    },
+    {
+      id: 'alerts',
+      label: 'Platform alerts',
+      value: platformAlerts ? String(platformAlerts) : 'Quiet',
+      helper: activityFeed.length
+        ? `${activityFeed.length} recent platform-visible events`
+        : 'Activity feed is currently quiet',
+      tone: platformAlerts ? 'warning' : 'success',
+    },
+  ];
+};
+
+export const buildPlatformCapabilities = (user: any): PlatformCapabilitySet => {
+  const roleKey = normalizeRoleKey(user);
+  const canManagePlatform =
+    roleKey === 'super_admin' || hasPermission(user, 'platformcontrol', 'manage');
+
+  return {
+    roleLabel:
+      roleKey === 'super_admin'
+        ? 'Owner'
+        : roleKey === 'super_admin_manager'
+          ? 'Platform Manager'
+          : 'Platform Team',
+    canManagePlatform,
+    canCreateTenant: canManagePlatform,
+    canImpersonate: canManagePlatform,
+    canEditBilling: canManagePlatform,
+    canReviewAudit:
+      roleKey === 'super_admin' || hasPermission(user, 'platformcontrol', 'view'),
+    canAccessAiInsights:
+      roleKey === 'super_admin' || hasPermission(user, 'platformcontrol', 'view'),
+  };
+};
+
+export const buildDashboardModel = ({
+  overview,
+  tenants,
+  importBatches = [],
+}: {
+  overview?: any;
+  tenants: PlatformTenantRecord[];
+  importBatches?: PlatformImportBatchRecord[];
+}): PlatformDashboardModel => {
+  const totalMrr = tenants.reduce(
+    (sum, tenant) => sum + (tenant.status === 'suspended' ? 0 : tenant.mrr),
+    0
+  );
   const averageSetupCompletion = Math.round(
     tenants.reduce((sum, tenant) => sum + tenant.setupCompletion, 0) / Math.max(tenants.length, 1)
   );
-  const attentionItems: PlatformAttentionItem[] = tenants
-    .flatMap((tenant) =>
-      tenant.warnings.slice(0, 2).map((message, index) => ({
-        id: `${tenant.id}-warning-${index}`,
-        tenantId: tenant.id,
-        tenantName: tenant.name,
-        level: tenant.attentionLevel,
-        label:
-          tenant.attentionLevel === 'critical'
-            ? 'Needs intervention'
-            : tenant.attentionLevel === 'watch'
-              ? 'Monitor closely'
-              : 'Healthy',
-        message,
-        category: /billing/i.test(message)
-          ? 'billing'
-          : /workflow|setup|import|branding/i.test(message)
-            ? 'onboarding'
-            : 'operations',
-      }))
-    )
+  const averageHealthScore = Math.round(
+    tenants.reduce((sum, tenant) => sum + tenant.healthScore, 0) / Math.max(tenants.length, 1)
+  );
+
+  const activeTenants = tenants.filter((tenant) => tenant.status === 'active').length;
+  const suspendedTenants = tenants.filter((tenant) => tenant.status === 'suspended').length;
+  const onboardingInProgress = tenants.filter((tenant) =>
+    ['trial', 'onboarding'].includes(tenant.status)
+  ).length;
+  const billingIssues = tenants.filter(isBillingIssue).length;
+  const launchReadyTenants = tenants.filter(
+    (tenant) =>
+      tenant.setupCompletion >= 85 &&
+      tenant.status !== 'suspended' &&
+      !isBillingIssue(tenant)
+  ).length;
+  const activeImports = importBatches.filter((batch) =>
+    ['uploaded', 'validated'].includes(batch.status)
+  ).length;
+
+  const attentionItems = [...buildTenantAttentionItems(tenants), ...buildImportAttentionItems(importBatches)]
     .sort((left, right) => {
       const leftScore = left.level === 'critical' ? 3 : left.level === 'watch' ? 2 : 1;
       const rightScore = right.level === 'critical' ? 3 : right.level === 'watch' ? 2 : 1;
       return rightScore - leftScore;
     })
-    .slice(0, 8);
+    .slice(0, 10);
+
+  const criticalIssues = attentionItems.filter((item) => item.level === 'critical').length;
+  const importFailurePenalty =
+    importBatches.filter((batch) => batch.status === 'failed').length * 4;
+  const platformHealthScore = clamp(
+    Math.round(averageHealthScore - billingIssues * 2 - criticalIssues * 1.5 - importFailurePenalty),
+    tenants.length ? 18 : 0,
+    100
+  );
 
   const months = buildSeriesMonths();
   const revenueTrend: PlatformChartDatum[] = months.map((month) => ({
@@ -452,6 +893,7 @@ export const buildDashboardModel = (
       .filter((tenant) => sameOrBeforeMonth(tenant.createdAt, month))
       .reduce((sum, tenant) => sum + (tenant.status === 'suspended' ? 0 : tenant.mrr), 0),
   }));
+
   const tenantGrowthTrend: PlatformChartDatum[] = months.map((month) => ({
     label: toMonthLabel(month),
     value: tenants.filter((tenant) => sameOrBeforeMonth(tenant.createdAt, month)).length,
@@ -475,79 +917,135 @@ export const buildDashboardModel = (
     {
       label: 'In Progress',
       value: tenants.filter(
-        (tenant) => tenant.setupCompletion >= 50 && tenant.setupCompletion < 85
+        (tenant) => tenant.setupCompletion >= 55 && tenant.setupCompletion < 85
       ).length,
     },
     {
       label: 'Blocked',
-      value: tenants.filter((tenant) => tenant.setupCompletion < 50).length,
+      value: tenants.filter((tenant) => tenant.setupCompletion < 55).length,
     },
   ];
 
-  const activityFeed: PlatformActivityItem[] =
-    (overview?.recentAuditLogs || []).length
-      ? overview.recentAuditLogs.map((log: any) => ({
-          id: log._id,
-          title: `${log.action} • ${log.resource}`,
-          description: log.resourceName || log.module || 'Owner-level action recorded',
-          timestamp: log.createdAt,
-          actor: log.userName || 'System',
-          module: log.module,
-          status: log.status || 'success',
-        }))
-      : (ownerSnapshot?.consultancies || [])
-          .flatMap((consultancy) => consultancy.activityFeed.slice(0, 2))
-          .sort((left, right) => +new Date(right.timestamp) - +new Date(left.timestamp))
-          .slice(0, 8)
-          .map((item) => ({
-            id: item.id,
-            title: item.title,
-            description: item.description,
-            timestamp: item.timestamp,
-            actor: item.actor,
-            status: item.type,
-          }));
+  const healthDistribution: PlatformChartDatum[] = [
+    {
+      label: 'Healthy',
+      value: tenants.filter((tenant) => tenant.healthScore >= 85).length,
+    },
+    {
+      label: 'Watch',
+      value: tenants.filter(
+        (tenant) => tenant.healthScore >= 65 && tenant.healthScore < 85
+      ).length,
+    },
+    {
+      label: 'Critical',
+      value: tenants.filter((tenant) => tenant.healthScore < 65).length,
+    },
+  ];
 
-  const criticalIssues = attentionItems.filter((item) => item.level === 'critical').length;
+  const branchDistribution: PlatformChartDatum[] = [
+    {
+      label: '1-2 branches',
+      value: tenants.filter((tenant) => tenant.branches >= 1 && tenant.branches <= 2).length,
+    },
+    {
+      label: '3-5 branches',
+      value: tenants.filter((tenant) => tenant.branches >= 3 && tenant.branches <= 5).length,
+    },
+    {
+      label: '6-10 branches',
+      value: tenants.filter((tenant) => tenant.branches >= 6 && tenant.branches <= 10).length,
+    },
+    {
+      label: '10+ branches',
+      value: tenants.filter((tenant) => tenant.branches > 10).length,
+    },
+  ];
+
+  const alertSeverityDistribution: PlatformChartDatum[] = [
+    {
+      label: 'Critical',
+      value: attentionItems.filter((item) => item.level === 'critical').length,
+    },
+    {
+      label: 'Watch',
+      value: attentionItems.filter((item) => item.level === 'watch').length,
+    },
+    {
+      label: 'Healthy',
+      value: Math.max(tenants.length - attentionItems.length, 0),
+    },
+  ];
+
+  const importTrend: PlatformChartDatum[] = months.map((month) => ({
+    label: toMonthLabel(month),
+    value: importBatches.filter(
+      (batch) => batch.status === 'imported' && sameOrBeforeMonth(batch.createdAt, month)
+    ).length,
+    secondaryValue: importBatches.filter(
+      (batch) => batch.status === 'failed' && sameOrBeforeMonth(batch.createdAt, month)
+    ).length,
+  }));
+
+  const activityFeed = buildActivityFeed(overview, importBatches);
+  const aiInsights = buildAiInsights(tenants, importBatches);
+  const systemHealth = buildSystemHealth(overview, tenants, importBatches, activityFeed);
 
   return {
     tenants,
+    imports: importBatches,
     totalMrr,
     averageSetupCompletion,
+    averageHealthScore,
+    platformHealthScore,
+    activeTenants,
+    suspendedTenants,
+    onboardingInProgress,
+    billingIssues,
+    launchReadyTenants,
+    activeImports,
     criticalIssues,
     heroInsights: [
       {
-        id: 'mrr',
-        label: 'Monthly recurring revenue',
-        value: new Intl.NumberFormat('en-US', {
-          style: 'currency',
-          currency: 'USD',
-          maximumFractionDigits: 0,
-        }).format(totalMrr),
-        tone: 'info',
-        helper: `${tenants.filter((tenant) => tenant.status !== 'suspended').length} revenue-contributing tenants`,
+        id: 'platform-health',
+        label: 'Platform Health',
+        value: `${platformHealthScore}/100`,
+        tone:
+          platformHealthScore >= 84 ? 'healthy' : platformHealthScore >= 65 ? 'watch' : 'critical',
+        helper: `${averageHealthScore}/100 average tenant health across the portfolio`,
       },
       {
-        id: 'setup',
-        label: 'Average setup readiness',
-        value: `${averageSetupCompletion}%`,
-        tone: averageSetupCompletion >= 84 ? 'healthy' : averageSetupCompletion >= 64 ? 'watch' : 'critical',
-        helper: `${onboardingDistribution[2].value} tenants are still blocked`,
+        id: 'onboarding-queue',
+        label: 'Onboarding Queue',
+        value: String(onboardingInProgress + activeImports),
+        tone: onboardingInProgress + activeImports > 0 ? 'info' : 'healthy',
+        helper: `${onboardingInProgress} tenants in setup / ${activeImports} import jobs still active`,
       },
       {
-        id: 'attention',
-        label: 'Needs attention',
-        value: String(attentionItems.length),
-        tone: criticalIssues ? 'critical' : 'watch',
-        helper: `${criticalIssues} critical issues surfaced across billing, onboarding, and activity`,
+        id: 'critical-issues',
+        label: 'Critical Issues',
+        value: String(criticalIssues),
+        tone: criticalIssues ? 'critical' : 'healthy',
+        helper: `${billingIssues} billing issues and ${suspendedTenants} suspended tenants currently visible`,
       },
     ],
     revenueTrend,
     tenantGrowthTrend,
     planDistribution,
     onboardingDistribution,
+    healthDistribution,
+    branchDistribution,
+    alertSeverityDistribution,
+    importTrend,
     attentionItems,
     activityFeed,
+    aiInsights,
+    systemHealth,
+    emptyStates: {
+      hasTenants: tenants.length > 0,
+      hasImports: importBatches.length > 0,
+      hasActivity: activityFeed.length > 0,
+    },
   };
 };
 

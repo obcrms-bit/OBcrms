@@ -411,6 +411,28 @@ export default function PlatformTenantsPage() {
     }
   }, [login, router, selectedTenant]);
 
+  const handleDirectOpenTenant = useCallback(
+    async (tenant: PlatformTenantRecord) => {
+      if (tenant.source !== 'api') {
+        router.push(`/platform/onboarding?tenant=${tenant.id}`);
+        return;
+      }
+
+      try {
+        const response = await superAdminAPI.impersonateTenant(tenant.id);
+        await login(response.data?.data);
+        router.push('/tenant/dashboard');
+      } catch (error: any) {
+        setActionError(
+          error?.response?.data?.message ||
+            error?.message ||
+            'Failed to open tenant workspace.'
+        );
+      }
+    },
+    [login, router]
+  );
+
   const handleExport = useCallback(
     (records: PlatformTenantRecord[]) => {
       exportTenantRecords(records, 'platform-tenants.csv');
@@ -526,6 +548,21 @@ export default function PlatformTenantsPage() {
               onOpenOnboarding={(tenant) =>
                 router.push(`/platform/onboarding?tenant=${tenant.id}`)
               }
+              onOpenTenant={handleDirectOpenTenant}
+              onOpenBilling={(tenant) =>
+                router.push(
+                  tenant.source === 'api'
+                    ? `/platform/tenants/${tenant.id}?tab=subscription`
+                    : `/platform/onboarding?tenant=${tenant.id}`
+                )
+              }
+              onOpenAudit={(tenant) =>
+                router.push(
+                  tenant.source === 'api'
+                    ? `/platform/tenants/${tenant.id}?tab=audit`
+                    : `/platform/onboarding?tenant=${tenant.id}`
+                )
+              }
               onToggleStatus={(tenant) =>
                 performStatusUpdate(
                   [tenant],
@@ -636,6 +673,22 @@ export default function PlatformTenantsPage() {
         }
         onResumeOnboarding={() =>
           selectedTenant && router.push(`/platform/onboarding?tenant=${selectedTenant.id}`)
+        }
+        onOpenBilling={() =>
+          selectedTenant &&
+          router.push(
+            selectedTenant.source === 'api'
+              ? `/platform/tenants/${selectedTenant.id}?tab=subscription`
+              : `/platform/onboarding?tenant=${selectedTenant.id}`
+          )
+        }
+        onOpenAudit={() =>
+          selectedTenant &&
+          router.push(
+            selectedTenant.source === 'api'
+              ? `/platform/tenants/${selectedTenant.id}?tab=audit`
+              : `/platform/onboarding?tenant=${selectedTenant.id}`
+          )
         }
       />
     </div>
