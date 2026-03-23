@@ -1,7 +1,7 @@
 # Vercel Frontend Deployment Guide
 
 ## Prerequisites
-- Node.js 18+ installed locally
+- Node.js 20.x installed locally
 - Vercel account (vercel.com)
 - Git repository initialized and pushed to GitHub/GitLab/Bitbucket
 
@@ -54,9 +54,9 @@ vercel --prod
 ## Build Configuration
 
 - **Framework**: Next.js 14.0.4
-- **Node Version**: 18+ (recommended)
+- **Node Version**: 20.x (required)
 - **Build Command**: `npm run build`
-- **Install Command**: `npm ci`
+- **Install Command**: `npm install --legacy-peer-deps`
 - **Output Directory**: `.next`
 
 ## Troubleshooting

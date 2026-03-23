@@ -1,7 +1,7 @@
 import React from 'react';
-import DashboardLayout from '../../src/layouts/DashboardLayout';
-import Dashboard from '../../src/modules/dashboard/Dashboard';
-import { AuthProvider } from '../../src/context/AuthContext';
+import DashboardLayout from '@/components/layout/DashboardLayout';
+import Dashboard from '@/components/dashboard/Dashboard';
+import { AuthProvider } from '@/lib/context/AuthContext';
 
 export default function DashboardPage() {
     return (
