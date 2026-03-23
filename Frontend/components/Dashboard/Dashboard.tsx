@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Users, UserPlus, GraduationCap, Phone, BookOpen, FileText, Search, Filter, RotateCcw, Star, CalendarClock } from 'lucide-react';
+import { Users, UserPlus, GraduationCap, Phone, BookOpen, FileText, Search, RotateCcw, Star, CalendarClock } from 'lucide-react';
 
 // --- Subcomponents mapping exact UI ---
 
