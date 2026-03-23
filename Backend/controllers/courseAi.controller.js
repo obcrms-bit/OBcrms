@@ -46,8 +46,8 @@ exports.generateRecommendations = async (req, res) => {
     const savedRecs = await CourseRecommendation.insertMany(recommendationDocs);
 
     const populatedRecs = await CourseRecommendation.find(queryObj)
-        .populate('courseId')
-        .sort({ matchScore: -1 });
+      .populate('courseId')
+      .sort({ matchScore: -1 });
 
     res.status(200).json({ success: true, data: populatedRecs });
 

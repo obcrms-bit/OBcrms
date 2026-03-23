@@ -164,30 +164,30 @@ exports.addOfficeVisit = async (req, res) => {
 
 exports.updateProfileData = async (req, res) => {
   try {
-     const { id } = req.params;
-     const { type } = req.query;
-     const { academicProfile, testScores, careerInterest } = req.body;
-     const queryObj = type === 'student' ? { studentId: id } : { leadId: id };
+    const { id } = req.params;
+    const { type } = req.query;
+    const { academicProfile, testScores, careerInterest } = req.body;
+    const queryObj = type === 'student' ? { studentId: id } : { leadId: id };
 
-     if(academicProfile) {
-       await StudentAcademicProfile.findOneAndUpdate(queryObj, { ...academicProfile, ...queryObj }, { upsert: true, new: true });
-     }
+    if (academicProfile) {
+      await StudentAcademicProfile.findOneAndUpdate(queryObj, { ...academicProfile, ...queryObj }, { upsert: true, new: true });
+    }
      
-     // Simplified test score handling to just add/update what's sent. Complex sync might be needed in a real app.
-     if(testScores && testScores.length > 0) {
-        // Clear existing for simplicity and add new ones (or could upsert by testType)
-        await StudentTestScore.deleteMany(queryObj);
-        const toInsert = testScores.map(ts => ({ ...ts, ...queryObj }));
-        await StudentTestScore.insertMany(toInsert);
-     }
+    // Simplified test score handling to just add/update what's sent. Complex sync might be needed in a real app.
+    if (testScores && testScores.length > 0) {
+      // Clear existing for simplicity and add new ones (or could upsert by testType)
+      await StudentTestScore.deleteMany(queryObj);
+      const toInsert = testScores.map((ts) => ({ ...ts, ...queryObj }));
+      await StudentTestScore.insertMany(toInsert);
+    }
 
-     if(careerInterest) {
-       await CareerInterestProfile.findOneAndUpdate(queryObj, { ...careerInterest, ...queryObj }, { upsert: true, new: true });
-     }
+    if (careerInterest) {
+      await CareerInterestProfile.findOneAndUpdate(queryObj, { ...careerInterest, ...queryObj }, { upsert: true, new: true });
+    }
 
-     res.status(200).json({ success: true, message: 'Profile data updated successfully' });
+    res.status(200).json({ success: true, message: 'Profile data updated successfully' });
   } catch (error) {
-     console.error('Error in updateProfileData:', error);
-     res.status(500).json({ success: false, message: 'Server Error' });
+    console.error('Error in updateProfileData:', error);
+    res.status(500).json({ success: false, message: 'Server Error' });
   }
 };

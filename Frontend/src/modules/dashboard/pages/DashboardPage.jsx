@@ -1,7 +1,7 @@
 'use client';
 
-import OperationsDashboard from '../components/OperationsDashboard';
+import DashboardRouter from './DashboardRouter';
 
 export default function DashboardPage() {
-  return <OperationsDashboard />;
+  return <DashboardRouter />;
 }

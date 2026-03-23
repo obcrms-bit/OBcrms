@@ -36,7 +36,7 @@
    - **Region**: `Oregon (us-west)` or closest to you
    - **Branch**: `main`
    - **Root Directory**: `Backend`
-   - **Runtime**: `node-18`
+   - **Runtime**: `Node` (node-20)
    - **Build Command**: `npm install --legacy-peer-deps`
    - **Start Command**: `npm start`
 
@@ -86,7 +86,7 @@ curl https://your-backend-service.onrender.com/health
    - **Project Name**: `trust-education-crm`
    - **Framework**: `Next.js`
    - **Root Directory**: `Frontend`
-   - **Node Version**: `18.x`
+   - **Node Version**: `20.x`
 
 4. **Add Environment Variables**
 
@@ -230,7 +230,7 @@ trust-education-crm-erp/
 - [ ] Test Backend directly with curl first
 
 ### Build Failures
-- [ ] Check Node version (18.x recommended)
+- [ ] Check Node version (20.x required as per package.json)
 - [ ] Clear node_modules: `rm -rf node_modules && npm install`
 - [ ] Check package.json for broken dependencies
 - [ ] Review build logs in Render/Vercel dashboard
@@ -294,6 +294,3 @@ All systems ready for production deployment!
 5. Configure custom domains (optional)
 
 Good luck! 🚀
-
-
-
