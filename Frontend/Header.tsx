@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/AuthContext';
+import { useAuth } from '@/lib/context/AuthContext';
 import { Clock, LogOut } from 'lucide-react';
 
 export default function Header() {

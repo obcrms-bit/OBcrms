@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext } from 'react';
-import { useAuth } from '@/AuthContext';
+import { useAuth } from '@/lib/context/AuthContext';
 
 export type PlanTier = 'BASIC' | 'PRO' | 'ENTERPRISE';
 

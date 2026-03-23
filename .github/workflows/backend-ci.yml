@@ -12,7 +12,7 @@ on:
       - 'Backend/**'
 
 jobs:
-  test:
+  validate-and-test:
     runs-on: ubuntu-latest
     
     services:
@@ -52,44 +52,3 @@ jobs:
         [ -f "package.json" ] && echo "✅ package.json found"
         [ -d "models" ] && echo "✅ models directory found"
         [ -d "routes" ] && echo "✅ routes directory found"
-
-  build:
-    needs: test
-    runs-on: ubuntu-latest
-    
-    steps:
-    - uses: actions/checkout@v3
-    
-    - name: Setup Node.js
-      uses: actions/setup-node@v3
-      with:
-        node-version: '20'
-    
-    - name: Install dependencies
-      run: cd Backend && npm ci --production
-    
-    - name: Build Docker image
-      run: |
-        cd Backend
-        docker build -t crm-backend:latest . 2>/dev/null || echo "Dockerfile not configured yet"
-    
-    - name: Verify build
-      run: cd Backend && ls -la
-
-  deploy-staging:
-    needs: build
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
-    
-    steps:
-    - name: Deploy to staging
-      run: echo "Configure your staging deployment here (Railway, Heroku, etc.)"
-
-  deploy-production:
-    needs: build
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    
-    steps:
-    - name: Deploy to production
-      run: echo "Configure your production deployment here"

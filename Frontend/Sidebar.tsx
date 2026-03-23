@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { useAuth } from '@/AuthContext';
+import { useAuth } from '@/lib/context/AuthContext';
 import { Role } from '@/lib/types/auth';
 import { LayoutDashboard, PhoneCall, CalendarClock, Users, UserPlus, GraduationCap, ClipboardList, BookOpen, CreditCard, FileCheck, Mail, Map, Target, Bell, BarChart, Star, ShieldAlert, Building2, UploadCloud } from 'lucide-react';
 

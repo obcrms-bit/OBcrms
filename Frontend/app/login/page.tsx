@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AuthProvider, useAuth } from '@/AuthContext';
+import { AuthProvider, useAuth } from '@/lib/context/AuthContext';
 import { Role } from '@/lib/types/auth';
 
 function LoginForm() {

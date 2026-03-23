@@ -1,7 +1,7 @@
 import React from 'react';
 import SuperAdminLayout from '@/SuperAdminLayout';
 import TenantDetail from '@/TenantDetail';
-import { AuthProvider } from '@/AuthContext';
+import { AuthProvider } from '@/lib/context/AuthContext';
 
 export default function TenantDetailPage({ params }: { params: { id: string } }) {
     return (

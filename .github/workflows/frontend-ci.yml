@@ -13,7 +13,7 @@ on:
       - '.github/workflows/frontend-ci.yml'
 
 jobs:
-  lint:
+  validate-and-build:
     runs-on: ubuntu-latest
     
     steps:
@@ -32,44 +32,11 @@ jobs:
     - name: Run ESLint
       run: cd Frontend && npm run lint 2>/dev/null || echo "Linting configured"
     
-    - name: Check Next.js build
-      run: cd Frontend && npm run build
-
-  build:
-    needs: lint
-    runs-on: ubuntu-latest
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-    
-    - name: Install dependencies
-      run: cd Frontend && npm ci --legacy-peer-deps
-    
-    - name: Build Next.js application
+    - name: Run Typecheck
+      run: cd Frontend && npx tsc --noEmit
+      
+    - name: Build Next.js application (includes strict checks)
       run: cd Frontend && npm run build
     
     - name: Verify build output
       run: cd Frontend && [ -d ".next" ] && echo "✅ Next.js build successful"
-
-  test:
-    needs: lint
-    runs-on: ubuntu-latest
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-    
-    - name: Install dependencies
-      run: cd Frontend && npm ci --legacy-peer-deps
-    
-    - name: Run tests
-      run: cd Frontend && npm test 2>/dev/null || echo "Tests not configured yet"

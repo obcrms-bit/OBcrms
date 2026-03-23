@@ -1,9 +1,9 @@
 'use client';
 
 import React from 'react';
-import TenantAdminSidebar from '@/TenantAdminSidebar';
-import Header from '@/Header';
-import { ThemeProvider } from '@/ThemeContext';
+import TenantAdminSidebar from './TenantAdminSidebar';
+import Header from './Header';
+import { ThemeProvider } from './ThemeContext';
 
 export default function TenantAdminLayout({ children }: { children: React.ReactNode }) {
     return (

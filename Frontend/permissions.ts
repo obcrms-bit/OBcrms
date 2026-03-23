@@ -1,4 +1,4 @@
-import { Role } from './auth';
+import { Role } from '@/lib/types/auth';
 
 // Define exact system modules
 export type AppModule =
