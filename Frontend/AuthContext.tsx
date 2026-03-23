@@ -25,14 +25,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     useEffect(() => {
         const storedRole = (typeof window !== 'undefined' ? localStorage.getItem('mockRole') : null) as Role | null;
-        setTimeout(() => {
-            if (storedRole) {
-                setUser({ id: '1', name: 'Test User', email: 'test@trust.com', role: storedRole });
-            } else {
-                setUser(null);
-            }
-            setIsLoading(false);
-        }, 500);
+        if (storedRole) {
+            setUser({ id: '1', name: 'Test User', email: 'test@trust.com', role: storedRole });
+        } else {
+            setUser(null);
+        }
+        setIsLoading(false);
     }, []);
 
     const login = (role: Role) => {
