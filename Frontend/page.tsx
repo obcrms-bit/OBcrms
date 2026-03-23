@@ -1,13 +1,13 @@
 import React from 'react';
 import SuperAdminLayout from '@/SuperAdminLayout';
-import OwnerConsole from '@/OwnerConsole';
+import TenantDetail from '@/TenantDetail';
 import { AuthProvider } from '@/AuthContext';
 
-export default function SuperAdminPage() {
+export default function TenantDetailPage({ params }: { params: { id: string } }) {
     return (
         <AuthProvider>
             <SuperAdminLayout>
-                <OwnerConsole />
+                <TenantDetail tenantId={params.id} />
             </SuperAdminLayout>
         </AuthProvider>
     );

@@ -68,7 +68,8 @@ mongod
 These credentials are for local seeded development only. They are not guaranteed to exist on Render or any shared production database.
 
 ### Local Seeded Accounts Only
-- **Super Admin**: `admin@trusteducation.com / Trust@2025`
+- **Admin**: `admin@trusteducation.com / Trust@2025`
+- **Super Admin**: `owner@trusteducation.com / StrongPassword123!`
 
 **Important**:
 - These credentials only exist if you run `cd Backend && npm run seed` against a non-production database.
@@ -283,4 +284,3 @@ Ready to deploy? See `DEPLOYMENT_GUIDE.md` for:
 - Deploying frontend to Vercel or Netlify
 - MongoDB Atlas setup
 - Environment variables configuration
-

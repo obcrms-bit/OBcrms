@@ -3,8 +3,8 @@
 import React from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/AuthContext';
-import { Role } from '@/auth';
-import { LayoutDashboard, PhoneCall, CalendarClock, Users, UserPlus, GraduationCap, ClipboardList, BookOpen, CreditCard, FileCheck, Mail, Map, Target, Bell, BarChart, Star } from 'lucide-react';
+import { Role } from '@/lib/types/auth';
+import { LayoutDashboard, PhoneCall, CalendarClock, Users, UserPlus, GraduationCap, ClipboardList, BookOpen, CreditCard, FileCheck, Mail, Map, Target, Bell, BarChart, Star, ShieldAlert, Building2, UploadCloud } from 'lucide-react';
 
 interface NavItem {
     name: string;
@@ -14,6 +14,9 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
+    { name: 'Owner Console', href: '/super-admin', icon: ShieldAlert, allowedRoles: ['SUPER_ADMIN'] },
+    { name: 'Tenants Config', href: '/super-admin/tenants', icon: Building2, allowedRoles: ['SUPER_ADMIN'] },
+    { name: 'Onboarding Imports', href: '/super-admin/onboarding', icon: UploadCloud, allowedRoles: ['SUPER_ADMIN'] },
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, allowedRoles: ['SUPER_ADMIN', 'ADMIN', 'STAFF'] },
     { name: 'Call Management', href: '/calls', icon: PhoneCall, allowedRoles: ['SUPER_ADMIN', 'ADMIN', 'STAFF'] },
     { name: 'Scheduled Followup', href: '/followup', icon: CalendarClock, allowedRoles: ['SUPER_ADMIN', 'ADMIN', 'STAFF'] },
